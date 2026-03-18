@@ -1,7 +1,7 @@
 "use server";
 
 import { supabase } from "@/src/lib/supabase";
-import { Sense } from "@/src/types/database";
+import { Sense, Player } from "@/src/types/database";
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
@@ -23,7 +23,7 @@ export async function startGameAction(roomCode: string, hostId: string) {
     if (roomError || !room) throw new Error("Room not found.");
     if (room.host_id !== hostId) throw new Error("Only the host can start the game.");
 
-    // Win Condition Check: Prevent starting if target reached
+    // Win Condition Check
     const settings = room.round_settings;
     if (settings.mode === 'rounds' && room.current_round >= settings.target) {
       throw new Error("Game Over! Reset the game to play again.");
@@ -65,6 +65,7 @@ export async function startGameAction(roomCode: string, hostId: string) {
     const senses: Sense[] = ["Sight", "Sound", "Smell", "Touch", "Taste"];
     const shuffledSenses = shuffleArray(senses);
 
+    // Map updates to specific Supabase calls to ensure type safety
     const playerUpdates = shuffledPlayers.map((player, index) => {
       return supabase
         .from("players")
@@ -77,7 +78,11 @@ export async function startGameAction(roomCode: string, hostId: string) {
         .eq("id", player.id);
     });
 
-    await Promise.all(playerUpdates);
+    const results = await Promise.all(playerUpdates);
+    
+    // Check if any update failed
+    const firstError = results.find(r => r.error);
+    if (firstError?.error) throw firstError.error;
 
     const { error: updateRoomError } = await supabase
       .from("rooms")
@@ -93,6 +98,6 @@ export async function startGameAction(roomCode: string, hostId: string) {
     return { success: true };
   } catch (error: any) {
     console.error("Game Start Error:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message || "Unknown error occurred" };
   }
 }

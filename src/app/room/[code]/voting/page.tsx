@@ -10,7 +10,7 @@ import { GrossOutContainer } from "@/src/components/GrossOutContainer";
 import { SlimeBox } from "@/src/components/SlimeBox";
 import { useAudio } from "@/src/components/AudioProvider";
 
-// Define a type for the partial data we are fetching to satisfy TS
+// Define strict type for the specific columns we fetch
 type SuspectClue = Pick<Player, "id" | "current_clue" | "assigned_sense" | "voted_for">;
 
 function shuffleArray<T>(array: T[]): T[] {
@@ -49,14 +49,14 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         .eq("room_code", code);
 
       if (!playersData) return;
+      const typedPlayers = playersData as SuspectClue[];
 
-      const me = playersData.find(p => p.id === localId);
+      const me = typedPlayers.find(p => p.id === localId);
       if (me && me.voted_for) {
         setIsVoted(true);
       }
 
-      // Filter for players who actually wrote a clue
-      const validClues = playersData.filter(p => p.current_clue) as SuspectClue[];
+      const validClues = typedPlayers.filter(p => p.current_clue !== null);
       setClues(shuffleArray(validClues));
     };
 

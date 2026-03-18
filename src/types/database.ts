@@ -32,4 +32,5 @@ export interface Player {
   score: number;
   is_connected: boolean;
   last_seen: string; // TIMESTAMPTZ string
+  voted_for: string | null; // Added this to match your database schema and actions
 }
