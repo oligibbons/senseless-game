@@ -6,7 +6,7 @@ import { supabase } from "@/src/lib/supabase";
 import { Player, Room } from "@/src/types/database";
 import { startGameAction } from "@/src/app/actions/game";
 import { closeRoomAction, updateSettingsAction, playAgainAction } from "@/src/app/actions/lobby";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, Variants } from "framer-motion";
 import { GrossOutContainer } from "@/src/components/GrossOutContainer";
 import { SlimeBox } from "@/src/components/SlimeBox";
 import Image from "next/image";
@@ -161,11 +161,11 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
     await playAgainAction(code, currentPlayerId);
   };
 
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.1 } }
   };
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { opacity: 0, scale: 0.8 },
     show: { opacity: 1, scale: 1, transition: { type: "spring", stiffness: 300 } }
   };
