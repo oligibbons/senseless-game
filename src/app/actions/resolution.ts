@@ -9,7 +9,6 @@ export async function finalizeRoundAction(
   imposterStole: boolean
 ) {
   try {
-    // 1. Fetch all players to analyze the votes
     const { data: players, error: playersError } = await supabase
       .from("players")
       .select("*")
@@ -17,7 +16,6 @@ export async function finalizeRoundAction(
 
     if (playersError || !players) throw new Error("Could not fetch players.");
 
-    // 2. Tally the votes
     const voteCounts: Record<string, number> = {};
     players.forEach((p) => {
       if (p.voted_for) {
@@ -25,49 +23,55 @@ export async function finalizeRoundAction(
       }
     });
 
-    // 3. Calculate and apply scores
-    const updates = players.map((p) => {
+    const playerUpdates = players.map((p) => {
       let roundScore = 0;
-
       if (p.id === imposterId) {
-        // The Imposter
-        if (!imposterCaught) roundScore += 2; // The Getaway
-        if (imposterCaught && imposterStole) roundScore += 2; // The Steal
+        if (!imposterCaught) roundScore += 2;
+        if (imposterCaught && imposterStole) roundScore += 2;
       } else {
-        // The Innocents
-        if (p.voted_for === imposterId && !imposterStole) {
-          roundScore += 1; // The Hunt (Negated if Imposter stole)
-        }
-        if (voteCounts[p.id] > 0) {
-          roundScore -= 1; // The Penalty (Received rogue votes)
-        }
+        if (p.voted_for === imposterId && !imposterStole) roundScore += 1;
+        if (voteCounts[p.id] > 0) roundScore -= 1;
       }
 
-      // Update the player row (adding score, clearing round data)
       return supabase
         .from("players")
-        .update({
-          score: p.score + roundScore,
-          current_clue: null,
-          voted_for: null,
-          assigned_sense: null,
-          is_imposter: false,
-        })
+        .update({ score: p.score + roundScore })
         .eq("id", p.id);
     });
 
-    await Promise.all(updates);
+    await Promise.all(playerUpdates);
 
-    // 4. Reset the Room back to the Lobby
-    const { error: roomError } = await supabase
+    // Check Win Condition
+    const { data: room } = await supabase
       .from("rooms")
-      .update({
-        game_status: "lobby",
-        current_prompt_id: null,
-      })
-      .eq("room_code", roomCode);
+      .select("round_settings, current_round")
+      .eq("room_code", roomCode)
+      .single();
 
-    if (roomError) throw roomError;
+    const { data: leader } = await supabase
+      .from("players")
+      .select("score")
+      .eq("room_code", roomCode)
+      .order("score", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (!room) throw new Error("Room missing.");
+
+    const isFinished = room.round_settings.mode === 'rounds'
+      ? room.current_round >= room.round_settings.target
+      : (leader?.score || 0) >= room.round_settings.target;
+
+    // Only return to lobby if the game is NOT finished
+    if (!isFinished) {
+      await supabase
+        .from("rooms")
+        .update({ 
+          game_status: "lobby",
+          current_prompt_id: null 
+        })
+        .eq("room_code", roomCode);
+    }
 
     return { success: true };
   } catch (error: any) {
