@@ -6,6 +6,7 @@ import { supabase } from "@/src/lib/supabase";
 import { submitClueAction } from "@/src/app/actions/writing";
 import { SlimeBox } from "@/src/components/SlimeBox";
 import { useAudio } from "@/src/components/AudioProvider";
+import { motion, Variants } from "framer-motion";
 
 const SENSE_UI: Record<string, { icon: string; label: string; color: string }> = {
   Sight: { icon: "👁️", label: "BLOODSHOT EYES", color: "text-fleshy-pink" },
@@ -91,7 +92,6 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
     };
   }, [code, router]);
 
-  // Trigger reveal sound once data is loaded
   useEffect(() => {
     if (target && sense && !hasRevealed && !isSubmitted) {
       playSFX("write_reveal");
@@ -101,7 +101,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
 
   const handleSubmit = async () => {
     if (!playerId || clue.trim().length === 0) return;
-    playSFX("ui_splat"); // Heavy thud when they lock it in
+    playSFX("ui_splat");
     setIsSubmitting(true);
     setErrorMsg("");
 
@@ -125,9 +125,15 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   if (isSubmitted) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6 text-center space-y-8">
-        <h1 className="font-display text-6xl text-fleshy-pink drop-shadow-chunky">CLUE LOCKED</h1>
-        <p className="font-sans text-bruise-purple text-xl font-bold">Waiting for the other meat-sacks to finish writing...</p>
-        <div className="text-8xl animate-bounce">{activeSense.icon}</div>
+        <h1 className="font-display text-6xl text-fleshy-pink text-outline drop-shadow-chunky">CLUE LOCKED</h1>
+        <p className="font-sans text-bruise-purple text-xl font-bold">Waiting for the other meat-sacks...</p>
+        <motion.div 
+          animate={{ y: [0, -20, 0] }}
+          transition={{ duration: 2, repeat: Infinity }}
+          className="text-8xl"
+        >
+          {activeSense.icon}
+        </motion.div>
       </div>
     );
   }
@@ -141,9 +147,9 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
       )}
 
       <div className="text-center mt-2 mb-2 flex flex-col items-center">
-        <p className="font-sans text-bruise-purple font-black uppercase tracking-widest text-sm mb-[-10px] z-10">Your Target Is:</p>
+        <p className="font-sans text-bruise-purple font-black uppercase tracking-widest text-sm mb-[-10px] z-10 text-outline text-white">Your Target Is:</p>
         <SlimeBox color="yellow" className="min-h-[120px]">
-          <h1 className="font-display text-5xl text-bruise-purple drop-shadow-chunky leading-tight">
+          <h1 className="font-display text-5xl text-white text-outline drop-shadow-chunky leading-tight">
             {target}
           </h1>
         </SlimeBox>
@@ -152,7 +158,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
       <div className="text-center mb-6 flex flex-col items-center">
         <p className="font-sans text-bruise-purple/70 font-black uppercase tracking-widest text-xs mb-2">Describe it using only your:</p>
         <div className="text-6xl mb-1">{activeSense.icon}</div>
-        <h2 className={`font-display text-4xl ${activeSense.color} tracking-widest drop-shadow-chunky`}>
+        <h2 className={`font-display text-4xl ${activeSense.color} text-outline tracking-widest drop-shadow-chunky`}>
           {activeSense.label}
         </h2>
       </div>
@@ -175,7 +181,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
         <button
           onClick={handleSubmit}
           disabled={isSubmitting || clue.trim().length === 0}
-          className="w-full bg-toxic-green text-bruise-purple font-display text-4xl py-4 rounded-xl shadow-chunky transition-transform active:translate-y-1 active:shadow-none border-4 border-bruise-purple disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-toxic-green text-white text-outline font-display text-4xl py-4 rounded-xl shadow-chunky border-4 border-bruise-purple disabled:opacity-50"
         >
           {isSubmitting ? "LOCKING..." : "Lock Clue"}
         </button>

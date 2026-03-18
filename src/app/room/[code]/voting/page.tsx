@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
 import { submitVoteAction } from "@/src/app/actions/voting";
 import { Player } from "@/src/types/database";
-import { motion } from "framer-motion";
+import { motion, Variants } from "framer-motion"; // Added Variants
 import { GrossOutContainer } from "@/src/components/GrossOutContainer";
 import { SlimeBox } from "@/src/components/SlimeBox";
 import { useAudio } from "@/src/components/AudioProvider";
@@ -79,7 +79,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   const handleVote = async () => {
     if (!playerId || !selectedSuspect) return;
-    playSFX("vote_cast"); // The heavy, fleshy vault door slamming shut
+    playSFX("vote_cast"); 
     setIsSubmitting(true);
     setErrorMsg("");
 
@@ -95,7 +95,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   if (clues.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full font-display text-4xl text-bruise-purple animate-pulse">
+      <div className="flex items-center justify-center h-full font-display text-4xl text-bruise-purple animate-pulse text-outline text-white">
         GATHERING CLUES...
       </div>
     );
@@ -108,18 +108,18 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <motion.h1 
             initial={{ rotate: -10, scale: 0.5 }}
             animate={{ rotate: 0, scale: 1 }}
-            className="font-display text-7xl text-fleshy-pink drop-shadow-chunky leading-none"
+            className="font-display text-7xl text-fleshy-pink drop-shadow-chunky leading-none text-outline text-white"
           >
             VOTE CAST
           </motion.h1>
           <p className="font-sans text-xl font-bold text-bruise-purple">Awaiting the verdict...</p>
-          <div className="w-16 h-16 border-8 border-bruise-purple border-t-fleshy-pink rounded-full animate-spin"></div>
         </div>
       </GrossOutContainer>
     );
   }
 
-  const containerVariants = {
+  // Explicitly Typed Variants for Build Success
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
@@ -127,7 +127,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     }
   };
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { opacity: 0, x: -50 },
     show: { opacity: 1, x: 0, transition: { type: "spring", stiffness: 300 } }
   };
@@ -143,11 +143,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           </div>
         )}
 
-        <div className="text-center mt-2 mb-4 space-y-1">
-          <h1 className="font-display text-5xl text-bruise-purple drop-shadow-chunky leading-none">
+        <div className="text-center mt-2 mb-4">
+          <h1 className="font-display text-5xl text-white text-outline drop-shadow-chunky leading-none">
             WHO IS THE IMPOSTER?
           </h1>
-          <p className="font-sans text-bruise-purple/70 font-black uppercase text-xs tracking-widest">Read the clues. Trust no one.</p>
         </div>
 
         <motion.div 
@@ -165,20 +164,18 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             return (
               <motion.div
                 variants={itemVariants}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
                 key={suspect.id}
-                className={isSelected ? "drop-shadow-[0px_0px_10px_rgba(255,0,127,0.8)] scale-105 transition-all z-10" : "transition-all z-0"}
+                className={isSelected ? "drop-shadow-chunky scale-105 z-10" : ""}
               >
                 <SlimeBox
                   color={isSelected ? "yellow" : color}
                   onClick={() => setSelectedSuspect(suspect.id)}
                   className="min-h-[120px] !p-4"
                 >
-                  <div className={`font-sans font-black text-[10px] uppercase tracking-widest mb-1 ${isSelected ? "text-bruise-purple/70" : "text-white/70"}`}>
+                  <div className={`font-sans font-black text-[10px] uppercase text-outline text-white mb-1`}>
                     Sense: {suspect.assigned_sense}
                   </div>
-                  <div className={`font-display text-3xl leading-tight ${isSelected ? "text-bruise-purple" : "text-white"}`}>
+                  <div className={`font-display text-3xl leading-tight text-white text-outline`}>
                     "{suspect.current_clue}"
                   </div>
                 </SlimeBox>
@@ -187,25 +184,19 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           })}
         </motion.div>
 
-        {/* Action Footer */}
-        <motion.div 
-          initial={{ y: 50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="mt-auto pt-4"
-        >
+        <div className="mt-auto pt-4">
           <button
             onClick={handleVote}
             disabled={!selectedSuspect || isSubmitting}
             className={`w-full font-display text-4xl py-4 rounded-xl border-4 border-bruise-purple transition-all ${
               selectedSuspect && !isSubmitting
-                ? "bg-fleshy-pink text-white shadow-chunky active:translate-y-1 active:shadow-none"
+                ? "bg-fleshy-pink text-white text-outline shadow-chunky active:translate-y-1 active:shadow-none"
                 : "bg-gray-300 text-gray-500 opacity-50 cursor-not-allowed"
             }`}
           >
-            {isSubmitting ? "CASTING VOTE..." : "Lock Vote"}
+            {isSubmitting ? "CASTING..." : "Lock Vote"}
           </button>
-        </motion.div>
+        </div>
       </div>
     </GrossOutContainer>
   );

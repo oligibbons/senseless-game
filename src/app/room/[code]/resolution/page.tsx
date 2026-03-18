@@ -6,7 +6,7 @@ import { supabase } from "@/src/lib/supabase";
 import { finalizeRoundAction } from "@/src/app/actions/resolution";
 import { Player, Prompt } from "@/src/types/database";
 import levenshtein from "fast-levenshtein";
-import { motion } from "framer-motion";
+import { motion, Variants } from "framer-motion";
 import { GrossOutContainer, ScreenShake } from "@/src/components/GrossOutContainer";
 import { SlimeBox } from "@/src/components/SlimeBox";
 import { useAudio } from "@/src/components/AudioProvider";
@@ -155,10 +155,34 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
   };
 
   if (!imposter || isCaught === null) {
-    return <div className="flex items-center justify-center h-full font-display text-4xl text-bruise-purple animate-pulse">TALLYING VOTES...</div>;
+    return <div className="flex items-center justify-center h-full font-display text-4xl text-bruise-purple animate-pulse text-outline text-white">TALLYING VOTES...</div>;
   }
 
   const isMeImposter = playerId === imposter.id;
+
+  // TypeScript strictly typed variants
+  const revealVariants: Variants = {
+    hidden: { scale: 0.8, opacity: 0 },
+    visible: { scale: 1, opacity: 1 }
+  };
+
+  const stampVariants: Variants = {
+    hidden: { scale: 3, opacity: 0 },
+    visible: { 
+      scale: 1, 
+      opacity: 1, 
+      transition: { type: "spring", stiffness: 300, damping: 10, delay: 0.5 } 
+    }
+  };
+
+  const escapeVariants: Variants = {
+    hidden: { y: -50, opacity: 0 },
+    visible: { 
+      y: 0, 
+      opacity: 1, 
+      transition: { type: "spring", stiffness: 200, damping: 15, delay: 0.5 } 
+    }
+  };
 
   return (
     <ScreenShake trigger={isCaught}>
@@ -169,9 +193,10 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
             <p className="font-sans text-bruise-purple/70 font-black uppercase tracking-widest text-xs">The Imposter Was</p>
             <SlimeBox color={isCaught ? "pink" : "yellow"} className="min-h-[140px] z-10">
               <motion.h1 
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className={`font-display text-6xl drop-shadow-chunky leading-none ${isCaught ? "text-white" : "text-bruise-purple"}`}
+                variants={revealVariants}
+                initial="hidden"
+                animate="visible"
+                className={`font-display text-6xl drop-shadow-chunky leading-none text-white text-outline`}
               >
                 {imposter.player_name}
               </motion.h1>
@@ -179,19 +204,19 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
 
             {isCaught ? (
               <motion.div 
-                initial={{ scale: 3, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: "spring", stiffness: 300, damping: 10, delay: 0.5 }}
-                className="bg-toxic-green text-bruise-purple font-display text-5xl py-2 px-6 rounded-xl shadow-chunky inline-block transform rotate-2 border-4 border-bruise-purple -mt-8 relative z-20"
+                variants={stampVariants}
+                initial="hidden"
+                animate="visible"
+                className="bg-toxic-green text-white text-outline font-display text-5xl py-2 px-6 rounded-xl shadow-chunky inline-block transform rotate-2 border-4 border-bruise-purple -mt-8 relative z-20"
               >
                 CAUGHT!
               </motion.div>
             ) : (
               <motion.div 
-                initial={{ y: -50, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.5 }}
-                className="bg-fleshy-pink text-white font-display text-5xl py-2 px-6 rounded-xl shadow-chunky inline-block transform -rotate-2 border-4 border-bruise-purple -mt-8 relative z-20"
+                variants={escapeVariants}
+                initial="hidden"
+                animate="visible"
+                className="bg-fleshy-pink text-white text-outline font-display text-5xl py-2 px-6 rounded-xl shadow-chunky inline-block transform -rotate-2 border-4 border-bruise-purple -mt-8 relative z-20"
               >
                 ESCAPED!
               </motion.div>
@@ -213,8 +238,8 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
                   </p>
                   
                   <SlimeBox color="blue" className="min-h-[100px]">
-                    <span className="text-white/80 font-black uppercase text-[10px] tracking-widest block mb-1">Category Hint</span>
-                    <p className="font-display text-4xl text-white leading-none">{prompt?.category}</p>
+                    <span className="text-white font-black uppercase text-[10px] tracking-widest block mb-1 text-outline">Category Hint</span>
+                    <p className="font-display text-4xl text-white leading-none text-outline">{prompt?.category}</p>
                   </SlimeBox>
 
                   <input
@@ -232,7 +257,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
                     disabled={isFinalizing || stealGuess.length < 2}
                     className="!min-h-[100px] mt-2"
                   >
-                    <span className="font-display text-4xl text-white">
+                    <span className="font-display text-4xl text-white text-outline">
                       {isFinalizing ? "CHECKING..." : "ATTEMPT STEAL"}
                     </span>
                   </SlimeBox>
@@ -240,7 +265,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
               ) : (
                 <div className="flex flex-col items-center gap-4 animate-pulse mt-8">
                   <span className="text-7xl drop-shadow-chunky">🚨</span>
-                  <p className="font-display text-4xl text-fleshy-pink drop-shadow-chunky">
+                  <p className="font-display text-4xl text-white text-outline drop-shadow-chunky">
                     {imposter.player_name} IS ATTEMPTING A STEAL...
                   </p>
                 </div>
@@ -259,20 +284,21 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
               <SlimeBox color={stealResult === "success" ? "orange" : "purple"} className="min-h-[140px]">
                 {isCaught ? (
                   <div className="flex flex-col items-center justify-center space-y-2">
-                    <p className="font-display text-4xl text-white leading-none">
+                    <p className="font-display text-4xl text-white text-outline leading-none">
                       {stealResult === "success" ? "THE STEAL WAS SUCCESSFUL!" : "THE STEAL FAILED!"}
                     </p>
-                    <p className="font-sans font-black text-[10px] text-white/80 uppercase tracking-widest">
+                    <p className="font-sans font-black text-[10px] text-white text-outline uppercase tracking-widest">
                       The True Target was: <span className="text-toxic-green text-sm block mt-1">{prompt?.true_target}</span>
                     </p>
                   </div>
                 ) : (
-                  <p className="font-display text-4xl text-white leading-tight">
+                  <p className="font-display text-4xl text-white text-outline leading-tight">
                     THE IMPOSTER SURVIVES TO LIE ANOTHER DAY.
                   </p>
                 )}
               </SlimeBox>
 
+              {/* Only show "Return to Lobby" to the host to control game flow */}
               {players.find(p => p.id === playerId)?.id === players.find(p => p.room_code === code)?.id && (
                  <SlimeBox 
                    color="yellow" 
@@ -280,7 +306,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
                    disabled={isFinalizing}
                    className="!min-h-[100px] mt-4"
                  >
-                   <span className="font-display text-4xl text-bruise-purple">
+                   <span className="font-display text-4xl text-white text-outline">
                      {isFinalizing ? "RESETTING..." : "RETURN TO LOBBY"}
                    </span>
                  </SlimeBox>
