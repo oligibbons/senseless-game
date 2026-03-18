@@ -53,8 +53,9 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
         .eq("room_code", code);
 
       if (playersData) {
-        setPlayers(playersData as Player[]);
-        prevPlayerCount.current = playersData.length;
+        const typedPlayers = playersData as Player[];
+        setPlayers(typedPlayers);
+        prevPlayerCount.current = typedPlayers.length;
       }
     };
 
@@ -68,16 +69,20 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
         (payload) => {
           if (payload.eventType === "INSERT") {
             setPlayers((prev) => {
-              const newPlayers = [...prev, payload.new as Player];
-              if (newPlayers.length > prevPlayerCount.current) {
+              const newPlayer = payload.new as Player;
+              // Prevent duplicates if local state already has them
+              if (prev.some(p => p.id === newPlayer.id)) return prev;
+              
+              const newPlayersList = [...prev, newPlayer];
+              if (newPlayersList.length > prevPlayerCount.current) {
                 playSFX("lobby_join");
               }
-              prevPlayerCount.current = newPlayers.length;
-              return newPlayers;
+              prevPlayerCount.current = newPlayersList.length;
+              return newPlayersList;
             });
           } else if (payload.eventType === "UPDATE") {
             setPlayers((prev) =>
-              prev.map((p) => (p.id === payload.new.id ? (payload.new as Player) : p))
+              prev.map((p) => (p.id === payload.new.id ? { ...p, ...(payload.new as Player) } : p))
             );
           } else if (payload.eventType === "DELETE") {
             setPlayers((prev) => {
@@ -133,7 +138,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
 
   const isGameOver = room.round_settings.mode === "rounds" 
     ? room.current_round >= room.round_settings.target && room.current_round > 0
-    : sortedPlayers[0]?.score >= room.round_settings.target;
+    : sortedPlayers.length > 0 && sortedPlayers[0].score >= room.round_settings.target;
 
   const handleStartGame = async () => {
     if (!isHost || !canStart || isStarting) return;
@@ -153,10 +158,12 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
   };
 
   const handleUpdateSettings = async (mode: 'rounds' | 'score', val: number) => {
+    if (!isHost) return;
     await updateSettingsAction(code, currentPlayerId, mode, val);
   };
 
   const handlePlayAgain = async () => {
+    if (!isHost) return;
     playSFX("lobby_start");
     await playAgainAction(code, currentPlayerId);
   };
@@ -311,7 +318,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
           {isGameOver ? (
             <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="space-y-2">
               <div className="text-center animate-bounce">
-                <p className="font-display text-3xl text-fleshy-pink text-outline drop-shadow-chunky uppercase">Winner: {sortedPlayers[0].player_name}</p>
+                <p className="font-display text-3xl text-fleshy-pink text-outline drop-shadow-chunky uppercase">Winner: {sortedPlayers[0]?.player_name}</p>
               </div>
               {isHost && (
                 <SlimeBox color="yellow" onClick={handlePlayAgain} className="!min-h-[90px] !p-4">
