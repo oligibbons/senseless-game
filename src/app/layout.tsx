@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Creepster, Inter } from "next/font/google";
 import "./globals.css";
-import { GlobalAudio } from "@/src/components/GlobalAudio";
+import { AudioProvider } from "@/src/components/AudioProvider";
+import { GrossBackground } from "@/src/components/GrossBackground";
 
 // The new drippy, gross-out font
 const displayFont = Creepster({
@@ -47,8 +48,10 @@ export default function RootLayout({
         className={`${displayFont.variable} ${inter.variable} font-sans bg-white text-bruise-purple antialiased min-h-screen flex justify-center`}
       >
         <main className="w-full max-w-[430px] min-h-[100dvh] bg-white relative overflow-hidden shadow-2xl flex flex-col">
-          <GlobalAudio />
-          {children}
+          <GrossBackground />
+          <AudioProvider>
+            {children}
+          </AudioProvider>
         </main>
       </body>
     </html>
