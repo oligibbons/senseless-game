@@ -4,10 +4,11 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
 import { submitClueAction } from "@/src/app/actions/writing";
+import { SlimeBox } from "@/src/components/SlimeBox";
 
 const SENSE_UI: Record<string, { icon: string; label: string; color: string }> = {
   Sight: { icon: "👁️", label: "BLOODSHOT EYES", color: "text-fleshy-pink" },
-  Sound: { icon: "👂", label: "OOZING EARS", color: "text-warning-yellow" },
+  Sound: { icon: "👂", label: "OOZING EARS", color: "text-bruise-purple" },
   Smell: { icon: "👃", label: "HAIRY NOSE", color: "text-toxic-green" },
   Touch: { icon: "🖐️", label: "BLISTERED HANDS", color: "text-fleshy-pink" },
   Taste: { icon: "👅", label: "SLOBBERING TONGUE", color: "text-warning-yellow" },
@@ -34,7 +35,6 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
     setPlayerId(localId);
 
     const loadPhaseData = async () => {
-      // 1. Get room's current prompt ID
       const { data: room } = await supabase
         .from("rooms")
         .select("current_prompt_id")
@@ -43,7 +43,6 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
 
       if (!room || !room.current_prompt_id) return;
 
-      // 2. Get player's assigned sense and imposter status
       const { data: player } = await supabase
         .from("players")
         .select("is_imposter, assigned_sense, current_clue")
@@ -54,12 +53,10 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
 
       setSense(player.assigned_sense || "Sight");
 
-      // If they already submitted (e.g., they refreshed the page), lock them out
       if (player.current_clue) {
         setIsSubmitted(true);
       }
 
-      // 3. Get the prompt content
       const { data: prompt } = await supabase
         .from("prompts")
         .select("true_target, imposter_target")
@@ -68,13 +65,11 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
 
       if (!prompt) return;
 
-      // The Imposter is fed the fake target. They have no idea.
       setTarget(player.is_imposter ? prompt.imposter_target : prompt.true_target);
     };
 
     loadPhaseData();
 
-    // 4. Listen for the global phase change to "voting"
     const channel = supabase
       .channel(`writing_${code}`)
       .on(
@@ -109,7 +104,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   };
 
   if (!target || !sense) {
-    return <div className="flex items-center justify-center h-full font-display text-4xl text-toxic-green animate-pulse">EXTRACTING DATA...</div>;
+    return <div className="flex items-center justify-center h-full font-display text-4xl text-bruise-purple animate-pulse">EXTRACTING DATA...</div>;
   }
 
   const activeSense = SENSE_UI[sense];
@@ -118,15 +113,15 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   if (isSubmitted) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6 text-center space-y-8">
-        <h1 className="font-display text-6xl text-toxic-green drop-shadow-chunky">CLUE LOCKED</h1>
-        <p className="font-sans text-xl font-bold">Waiting for the other meat-sacks to finish writing...</p>
+        <h1 className="font-display text-6xl text-fleshy-pink drop-shadow-chunky">CLUE LOCKED</h1>
+        <p className="font-sans text-bruise-purple text-xl font-bold">Waiting for the other meat-sacks to finish writing...</p>
         <div className="text-8xl animate-bounce">{activeSense.icon}</div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full p-6">
+    <div className="flex flex-col h-full p-4 relative z-10">
       {errorMsg && (
         <div className="bg-warning-yellow text-bruise-purple font-bold p-3 rounded-xl text-center mb-4 border-4 border-bruise-purple">
           {errorMsg}
@@ -134,18 +129,20 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
       )}
 
       {/* Target Reveal */}
-      <div className="text-center mt-4 mb-8 space-y-2">
-        <p className="font-sans text-fleshy-pink font-bold uppercase tracking-widest text-sm">Your Target Is:</p>
-        <h1 className="font-display text-5xl text-white drop-shadow-chunky leading-tight border-4 border-fleshy-pink p-4 rounded-xl bg-dark-void">
-          {target}
-        </h1>
+      <div className="text-center mt-2 mb-2 flex flex-col items-center">
+        <p className="font-sans text-bruise-purple font-black uppercase tracking-widest text-sm mb-[-10px] z-10">Your Target Is:</p>
+        <SlimeBox color="yellow" className="min-h-[120px]">
+          <h1 className="font-display text-5xl text-bruise-purple drop-shadow-chunky leading-tight">
+            {target}
+          </h1>
+        </SlimeBox>
       </div>
 
       {/* Sense Assignment */}
-      <div className="text-center mb-8 flex flex-col items-center">
-        <p className="font-sans text-white/70 font-bold uppercase tracking-widest text-sm mb-2">Describe it using only your:</p>
-        <div className="text-6xl mb-2">{activeSense.icon}</div>
-        <h2 className={`font-display text-4xl ${activeSense.color} tracking-widest`}>
+      <div className="text-center mb-6 flex flex-col items-center">
+        <p className="font-sans text-bruise-purple/70 font-black uppercase tracking-widest text-xs mb-2">Describe it using only your:</p>
+        <div className="text-6xl mb-1">{activeSense.icon}</div>
+        <h2 className={`font-display text-4xl ${activeSense.color} tracking-widest drop-shadow-chunky`}>
           {activeSense.label}
         </h2>
       </div>
@@ -159,9 +156,9 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
             maxLength={50}
             disabled={isSubmitting}
             placeholder="Type your clue here..."
-            className="w-full h-32 bg-white text-bruise-purple font-sans font-bold text-2xl p-4 rounded-xl border-4 border-toxic-green focus:outline-none focus:border-warning-yellow resize-none disabled:opacity-50"
+            className="w-full h-32 bg-white text-bruise-purple font-sans font-bold text-2xl p-4 rounded-xl border-8 border-bruise-purple shadow-chunky focus:outline-none focus:border-fleshy-pink resize-none disabled:opacity-50"
           />
-          <span className={`absolute bottom-3 right-3 font-display text-2xl ${charsLeft <= 10 ? 'text-fleshy-pink' : 'text-gray-400'}`}>
+          <span className={`absolute bottom-4 right-4 font-display text-2xl ${charsLeft <= 10 ? 'text-fleshy-pink animate-pulse' : 'text-bruise-purple/40'}`}>
             {charsLeft}
           </span>
         </div>

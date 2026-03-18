@@ -8,6 +8,7 @@ import { Player, Prompt } from "@/src/types/database";
 import levenshtein from "fast-levenshtein";
 import { motion } from "framer-motion";
 import { GrossOutContainer, ScreenShake } from "@/src/components/GrossOutContainer";
+import { SlimeBox } from "@/src/components/SlimeBox";
 
 export default function ResolutionPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
@@ -107,7 +108,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
   };
 
   if (!imposter || isCaught === null) {
-    return <div className="flex items-center justify-center h-full font-display text-4xl text-toxic-green animate-pulse">TALLYING VOTES...</div>;
+    return <div className="flex items-center justify-center h-full font-display text-4xl text-bruise-purple animate-pulse">TALLYING VOTES...</div>;
   }
 
   const isMeImposter = playerId === imposter.id;
@@ -115,22 +116,26 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
   return (
     <ScreenShake trigger={isCaught}>
       <GrossOutContainer delay={0.2}>
-        <div className="flex flex-col h-full p-6 text-center">
-          <div className="mt-8 space-y-4 border-b-4 border-fleshy-pink pb-8">
-            <p className="font-sans text-white/70 font-bold uppercase tracking-widest text-sm">The Imposter Was</p>
-            <motion.h1 
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="font-display text-6xl text-warning-yellow drop-shadow-chunky leading-tight"
-            >
-              {imposter.player_name}
-            </motion.h1>
+        <div className="flex flex-col h-full p-4 text-center">
+          
+          <div className="mt-4 space-y-2 border-b-8 border-bruise-purple pb-6">
+            <p className="font-sans text-bruise-purple/70 font-black uppercase tracking-widest text-xs">The Imposter Was</p>
+            <SlimeBox color={isCaught ? "pink" : "yellow"} className="min-h-[140px] z-10">
+              <motion.h1 
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className={`font-display text-6xl drop-shadow-chunky leading-none ${isCaught ? "text-white" : "text-bruise-purple"}`}
+              >
+                {imposter.player_name}
+              </motion.h1>
+            </SlimeBox>
+
             {isCaught ? (
               <motion.div 
                 initial={{ scale: 3, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: "spring", stiffness: 300, damping: 10, delay: 0.5 }}
-                className="bg-toxic-green text-bruise-purple font-display text-4xl py-2 px-4 rounded-xl shadow-chunky inline-block transform rotate-2"
+                className="bg-toxic-green text-bruise-purple font-display text-5xl py-2 px-6 rounded-xl shadow-chunky inline-block transform rotate-2 border-4 border-bruise-purple -mt-8 relative z-20"
               >
                 CAUGHT!
               </motion.div>
@@ -139,7 +144,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
                 initial={{ y: -50, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.5 }}
-                className="bg-fleshy-pink text-white font-display text-4xl py-2 px-4 rounded-xl shadow-chunky inline-block transform -rotate-2"
+                className="bg-fleshy-pink text-white font-display text-5xl py-2 px-6 rounded-xl shadow-chunky inline-block transform -rotate-2 border-4 border-bruise-purple -mt-8 relative z-20"
               >
                 ESCAPED!
               </motion.div>
@@ -152,38 +157,43 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 1 }}
-              className="flex-grow flex flex-col justify-center gap-6 mt-8"
+              className="flex-grow flex flex-col justify-center gap-4 mt-6"
             >
               {isMeImposter ? (
                 <>
-                  <p className="font-sans text-white font-bold text-lg">
-                    You were caught. But you can steal the points if you guess the true target!
+                  <p className="font-sans text-bruise-purple font-black text-sm uppercase tracking-widest">
+                    You were caught. Guess the target to steal the points!
                   </p>
-                  <div className="bg-dark-void border-4 border-toxic-green p-4 rounded-xl space-y-2">
-                    <span className="text-toxic-green font-bold uppercase text-xs tracking-widest">Category Hint</span>
-                    <p className="font-display text-3xl text-white">{prompt?.category}</p>
-                  </div>
+                  
+                  <SlimeBox color="blue" className="min-h-[100px]">
+                    <span className="text-white/80 font-black uppercase text-[10px] tracking-widest block mb-1">Category Hint</span>
+                    <p className="font-display text-4xl text-white leading-none">{prompt?.category}</p>
+                  </SlimeBox>
+
                   <input
                     type="text"
                     placeholder="EXACT TARGET..."
                     value={stealGuess}
                     onChange={(e) => setStealGuess(e.target.value)}
                     disabled={isFinalizing}
-                    className="w-full bg-white text-bruise-purple font-display text-3xl text-center py-4 rounded-xl border-4 border-fleshy-pink focus:outline-none focus:border-warning-yellow uppercase disabled:opacity-50"
+                    className="w-full bg-white text-bruise-purple font-display text-4xl text-center py-4 rounded-xl border-8 border-bruise-purple focus:outline-none focus:border-fleshy-pink shadow-chunky uppercase disabled:opacity-50 transition-colors"
                   />
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleStealAttempt}
+                  
+                  <SlimeBox 
+                    color="orange" 
+                    onClick={handleStealAttempt} 
                     disabled={isFinalizing || stealGuess.length < 2}
-                    className="w-full bg-fleshy-pink text-white font-display text-4xl py-4 rounded-xl shadow-chunky border-4 border-bruise-purple disabled:opacity-50"
+                    className="!min-h-[100px] mt-2"
                   >
-                    {isFinalizing ? "CHECKING..." : "Attempt Steal"}
-                  </motion.button>
+                    <span className="font-display text-4xl text-white">
+                      {isFinalizing ? "CHECKING..." : "ATTEMPT STEAL"}
+                    </span>
+                  </SlimeBox>
                 </>
               ) : (
-                <div className="flex flex-col items-center gap-4 animate-pulse">
-                  <span className="text-7xl">🚨</span>
-                  <p className="font-display text-4xl text-fleshy-pink">
+                <div className="flex flex-col items-center gap-4 animate-pulse mt-8">
+                  <span className="text-7xl drop-shadow-chunky">🚨</span>
+                  <p className="font-display text-4xl text-fleshy-pink drop-shadow-chunky">
                     {imposter.player_name} IS ATTEMPTING A STEAL...
                   </p>
                 </div>
@@ -197,32 +207,36 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 1 }}
-              className="flex-grow flex flex-col justify-center gap-6 mt-8"
+              className="flex-grow flex flex-col justify-center gap-6 mt-4"
             >
-              {isCaught ? (
-                <div>
-                  <p className="font-display text-4xl mb-2">
-                    {stealResult === "success" ? "THE STEAL WAS SUCCESSFUL!" : "THE STEAL FAILED!"}
+              <SlimeBox color={stealResult === "success" ? "orange" : "purple"} className="min-h-[140px]">
+                {isCaught ? (
+                  <div className="flex flex-col items-center justify-center space-y-2">
+                    <p className="font-display text-4xl text-white leading-none">
+                      {stealResult === "success" ? "THE STEAL WAS SUCCESSFUL!" : "THE STEAL FAILED!"}
+                    </p>
+                    <p className="font-sans font-black text-[10px] text-white/80 uppercase tracking-widest">
+                      The True Target was: <span className="text-toxic-green text-sm block mt-1">{prompt?.true_target}</span>
+                    </p>
+                  </div>
+                ) : (
+                  <p className="font-display text-4xl text-white leading-tight">
+                    THE IMPOSTER SURVIVES TO LIE ANOTHER DAY.
                   </p>
-                  <p className="font-sans font-bold text-lg text-white/70">
-                    The True Target was: <span className="text-warning-yellow">{prompt?.true_target}</span>
-                  </p>
-                </div>
-              ) : (
-                <p className="font-sans font-bold text-lg text-white/70">
-                  The Imposter survives to lie another day.
-                </p>
-              )}
+                )}
+              </SlimeBox>
 
               {players.find(p => p.id === playerId)?.id === players.find(p => p.room_code === code)?.id && (
-                 <motion.button
-                 whileTap={{ scale: 0.95 }}
-                 onClick={handleHostContinue}
-                 disabled={isFinalizing}
-                 className="mt-8 w-full bg-toxic-green text-bruise-purple font-display text-4xl py-4 rounded-xl shadow-chunky border-4 border-bruise-purple disabled:opacity-50"
-               >
-                 {isFinalizing ? "RESETTING..." : "Return to Lobby"}
-               </motion.button>
+                 <SlimeBox 
+                   color="yellow" 
+                   onClick={handleHostContinue} 
+                   disabled={isFinalizing}
+                   className="!min-h-[100px] mt-4"
+                 >
+                   <span className="font-display text-4xl text-bruise-purple">
+                     {isFinalizing ? "RESETTING..." : "RETURN TO LOBBY"}
+                   </span>
+                 </SlimeBox>
               )}
             </motion.div>
           )}

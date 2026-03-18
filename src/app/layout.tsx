@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Bangers, Inter } from "next/font/google";
 import "./globals.css";
+import { GlobalAudio } from "@/src/components/GlobalAudio";
 
 // Load the chunky primary font
 const bangers = Bangers({
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
   description: "A darkly comedic, absurd, and highly social mobile party game.",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: "Senseless",
   },
 };
@@ -32,7 +33,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#12001A", // bruise-purple
+  themeColor: "#FFFFFF", // Updated to match the new white theme
 };
 
 export default function RootLayout({
@@ -43,10 +44,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${bangers.variable} ${inter.variable} font-sans bg-bruise-purple text-white antialiased min-h-screen flex justify-center`}
+        className={`${bangers.variable} ${inter.variable} font-sans bg-white text-bruise-purple antialiased min-h-screen flex justify-center`}
       >
         {/* The Mobile Sandbox: Forces all content into a phone-sized column */}
-        <main className="w-full max-w-[430px] min-h-[100dvh] bg-dark-void relative overflow-hidden shadow-2xl flex flex-col">
+        <main className="w-full max-w-[430px] min-h-[100dvh] bg-white relative overflow-hidden shadow-2xl flex flex-col">
+          <GlobalAudio />
           {children}
         </main>
       </body>
