@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
 import { submitVoteAction } from "@/src/app/actions/voting";
 import { Player } from "@/src/types/database";
-import { motion, Variants } from "framer-motion"; // Added Variants
+import { motion, Variants } from "framer-motion";
 import { GrossOutContainer } from "@/src/components/GrossOutContainer";
 import { SlimeBox } from "@/src/components/SlimeBox";
 import { useAudio } from "@/src/components/AudioProvider";
 
-// Fisher-Yates shuffle to randomize clues
+// Define a type for the partial data we are fetching to satisfy TS
+type SuspectClue = Pick<Player, "id" | "current_clue" | "assigned_sense" | "voted_for">;
+
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -26,7 +28,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const { playSFX } = useAudio();
 
   const [playerId, setPlayerId] = useState<string | null>(null);
-  const [clues, setClues] = useState<Player[]>([]);
+  const [clues, setClues] = useState<SuspectClue[]>([]);
   const [selectedSuspect, setSelectedSuspect] = useState<string | null>(null);
   const [isVoted, setIsVoted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -53,7 +55,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         setIsVoted(true);
       }
 
-      const validClues = playersData.filter(p => p.current_clue) as Player[];
+      // Filter for players who actually wrote a clue
+      const validClues = playersData.filter(p => p.current_clue) as SuspectClue[];
       setClues(shuffleArray(validClues));
     };
 
@@ -118,7 +121,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     );
   }
 
-  // Explicitly Typed Variants for Build Success
   const containerVariants: Variants = {
     hidden: { opacity: 0 },
     show: {

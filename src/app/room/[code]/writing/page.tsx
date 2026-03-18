@@ -6,7 +6,8 @@ import { supabase } from "@/src/lib/supabase";
 import { submitClueAction } from "@/src/app/actions/writing";
 import { SlimeBox } from "@/src/components/SlimeBox";
 import { useAudio } from "@/src/components/AudioProvider";
-import { motion, Variants } from "framer-motion";
+import { motion } from "framer-motion";
+import { Player } from "@/src/types/database";
 
 const SENSE_UI: Record<string, { icon: string; label: string; color: string }> = {
   Sight: { icon: "👁️", label: "BLOODSHOT EYES", color: "text-fleshy-pink" },
@@ -15,6 +16,9 @@ const SENSE_UI: Record<string, { icon: string; label: string; color: string }> =
   Touch: { icon: "🖐️", label: "BLISTERED HANDS", color: "text-fleshy-pink" },
   Taste: { icon: "👅", label: "SLOBBERING TONGUE", color: "text-warning-yellow" },
 };
+
+// Define strict type for the specific columns we fetch
+type WritingPlayer = Pick<Player, "is_imposter" | "assigned_sense" | "current_clue">;
 
 export default function WritingPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
@@ -47,13 +51,14 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
 
       if (!room || !room.current_prompt_id) return;
 
-      const { data: player } = await supabase
+      const { data: playerData } = await supabase
         .from("players")
         .select("is_imposter, assigned_sense, current_clue")
         .eq("id", localId)
         .single();
 
-      if (!player) return;
+      if (!playerData) return;
+      const player = playerData as WritingPlayer;
 
       setSense(player.assigned_sense || "Sight");
 
@@ -116,7 +121,11 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   };
 
   if (!target || !sense) {
-    return <div className="flex items-center justify-center h-full font-display text-4xl text-bruise-purple animate-pulse">EXTRACTING DATA...</div>;
+    return (
+      <div className="flex items-center justify-center h-full font-display text-4xl text-bruise-purple animate-pulse">
+        EXTRACTING DATA...
+      </div>
+    );
   }
 
   const activeSense = SENSE_UI[sense];

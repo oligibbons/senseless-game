@@ -11,29 +11,32 @@ import { GrossOutContainer, ScreenShake } from "@/src/components/GrossOutContain
 import { SlimeBox } from "@/src/components/SlimeBox";
 import { useAudio } from "@/src/components/AudioProvider";
 
+// Define strict type for the resolution data we fetch
+type ResolutionPlayer = Pick<Player, "id" | "player_name" | "is_imposter" | "voted_for" | "room_code">;
+
 export default function ResolutionPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
   const router = useRouter();
   const { playSFX } = useAudio();
 
   const [playerId, setPlayerId] = useState<string | null>(null);
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [imposter, setImposter] = useState<Player | null>(null);
+  const [players, setPlayers] = useState<ResolutionPlayer[]>([]);
+  const [imposter, setImposter] = useState<ResolutionPlayer | null>(null);
   const [prompt, setPrompt] = useState<Prompt | null>(null);
+  const [hostId, setHostId] = useState<string | null>(null);
   
   const [isCaught, setIsCaught] = useState<boolean | null>(null);
   const [stealGuess, setStealGuess] = useState("");
   const [stealResult, setStealResult] = useState<"pending" | "success" | "failed">("pending");
   const [isFinalizing, setIsFinalizing] = useState(false);
 
-  // Audio trackers to prevent overlapping sounds on re-renders
+  // Audio trackers
   const [hasPlayedDrumroll, setHasPlayedDrumroll] = useState(false);
   const [hasPlayedReveal, setHasPlayedReveal] = useState(false);
   const [hasPlayedStealAlarm, setHasPlayedStealAlarm] = useState(false);
   const [hasPlayedStealResult, setHasPlayedStealResult] = useState(false);
 
   useEffect(() => {
-    // Play drumroll immediately when the page mounts (Tallying Votes)
     if (!hasPlayedDrumroll) {
       playSFX("res_drumroll");
       setHasPlayedDrumroll(true);
@@ -50,22 +53,30 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
 
     const loadResolutionData = async () => {
       const { data: room } = await supabase.from("rooms").select("current_prompt_id, host_id").eq("room_code", code).single();
-      if (!room || !room.current_prompt_id) return;
+      if (!room) return;
+      setHostId(room.host_id);
 
-      const { data: promptData } = await supabase.from("prompts").select("*").eq("id", room.current_prompt_id).single();
-      if (promptData) setPrompt(promptData as Prompt);
+      if (room.current_prompt_id) {
+        const { data: promptData } = await supabase.from("prompts").select("*").eq("id", room.current_prompt_id).single();
+        if (promptData) setPrompt(promptData as Prompt);
+      }
 
-      const { data: playersData } = await supabase.from("players").select("*").eq("room_code", code);
+      const { data: playersData } = await supabase
+        .from("players")
+        .select("id, player_name, is_imposter, voted_for, room_code")
+        .eq("room_code", code);
+
       if (!playersData) return;
       
-      setPlayers(playersData as Player[]);
+      const typedPlayers = playersData as ResolutionPlayer[];
+      setPlayers(typedPlayers);
       
-      const foundImposter = playersData.find((p) => p.is_imposter);
+      const foundImposter = typedPlayers.find((p) => p.is_imposter);
       setImposter(foundImposter || null);
 
       if (foundImposter) {
         const voteCounts: Record<string, number> = {};
-        playersData.forEach((p) => {
+        typedPlayers.forEach((p) => {
           if (p.voted_for) voteCounts[p.voted_for] = (voteCounts[p.voted_for] || 0) + 1;
         });
 
@@ -97,7 +108,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
     };
   }, [code, router]);
 
-  // Audio: The Reveal
   useEffect(() => {
     if (isCaught !== null && !hasPlayedReveal) {
       if (isCaught) playSFX("res_caught");
@@ -106,7 +116,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
     }
   }, [isCaught, hasPlayedReveal, playSFX]);
 
-  // Audio: The Steal Alarm (Delayed slightly to match the Framer Motion UI)
   useEffect(() => {
     if (isCaught && stealResult === "pending" && !hasPlayedStealAlarm) {
       const t = setTimeout(() => {
@@ -117,7 +126,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
     }
   }, [isCaught, stealResult, hasPlayedStealAlarm, playSFX]);
 
-  // Audio: The Steal Result
   useEffect(() => {
     if (stealResult !== "pending" && !hasPlayedStealResult) {
       if (stealResult === "success") playSFX("steal_success");
@@ -128,7 +136,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
 
   const handleStealAttempt = async () => {
     if (!imposter || !prompt || isFinalizing) return;
-    playSFX("ui_splat"); // Heavy thud when submitting steal
+    playSFX("ui_splat");
     setIsFinalizing(true);
 
     let success = false;
@@ -159,8 +167,8 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
   }
 
   const isMeImposter = playerId === imposter.id;
+  const isHost = playerId === hostId;
 
-  // TypeScript strictly typed variants
   const revealVariants: Variants = {
     hidden: { scale: 0.8, opacity: 0 },
     visible: { scale: 1, opacity: 1 }
@@ -223,7 +231,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
             )}
           </div>
 
-          {/* The Steal Phase */}
           {isCaught && stealResult === "pending" && (
             <motion.div 
               initial={{ opacity: 0 }}
@@ -273,7 +280,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
             </motion.div>
           )}
 
-          {/* The Resolution Results */}
           {(stealResult !== "pending" || !isCaught) && (
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
@@ -298,8 +304,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
                 )}
               </SlimeBox>
 
-              {/* Only show "Return to Lobby" to the host to control game flow */}
-              {players.find(p => p.id === playerId)?.id === players.find(p => p.room_code === code)?.id && (
+              {isHost && (
                  <SlimeBox 
                    color="yellow" 
                    onClick={handleHostContinue} 
