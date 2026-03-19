@@ -2,7 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Creepster, Inter } from "next/font/google";
 import "./globals.css";
 import { AudioProvider } from "@/src/components/AudioProvider";
-import { GrossBackground } from "@/src/components/GrossBackground";
+// FIX: Changed from named import { GrossBackground } to default import
+import GrossBackground from "@/src/components/GrossBackground";
 
 // The new drippy, gross-out font
 const displayFont = Creepster({

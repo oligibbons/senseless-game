@@ -30,14 +30,16 @@ export default function GrossBackground() {
   const [icons, setIcons] = useState<FloatingIcon[]>([]);
 
   useEffect(() => {
-    // Generate a fixed set of floating icons once on mount
-    const newIcons: FloatingIcon[] = Array.from({ length: 15 }).map((_, i) => {
+    // INCREASED FREQUENCY: Generated 25 icons for a busier look
+    const newIcons: FloatingIcon[] = Array.from({ length: 25 }).map((_, i) => {
       // Determine "depth" - 0 is far/blurry, 2 is near/clear
       const depth = Math.floor(Math.random() * 3);
       
-      const sizes = [40, 60, 80];
+      const sizes = [45, 65, 85];
       const blurs = ["blur(4px)", "blur(2px)", "blur(0px)"];
-      const opacities = [0.05, 0.1, 0.15]; // Keep it subtle
+      
+      // INCREASED OPACITY: Values tuned to remain visible against a white background
+      const opacities = [0.15, 0.22, 0.3]; 
 
       return {
         id: i,
@@ -45,8 +47,8 @@ export default function GrossBackground() {
         x: Math.random() * 100, // Percentage
         y: Math.random() * 100, // Percentage
         size: sizes[depth],
-        duration: 20 + Math.random() * 40, // Very slow drift
-        delay: Math.random() * -20, // Negative delay so they start mid-animation
+        duration: 25 + Math.random() * 35, // slow drift
+        delay: Math.random() * -20, // Negative delay for mid-animation start
         opacity: opacities[depth],
         blur: blurs[depth],
         rotation: Math.random() * 360,
@@ -57,9 +59,10 @@ export default function GrossBackground() {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none bg-[#12001A]">
-      {/* Background Gradient/Vignette */}
-      <div className="absolute inset-0 bg-radial-vignette opacity-50" />
+    // Clean white background to replace the previous purple
+    <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none bg-white">
+      {/* Background Vignette utility defined in globals.css for subtle depth */}
+      <div className="absolute inset-0 bg-white-vignette opacity-100" />
 
       <AnimatePresence>
         {icons.map((icon) => (
@@ -72,9 +75,9 @@ export default function GrossBackground() {
               opacity: 0 
             }}
             animate={{ 
-              // Drifting motion
-              y: [`${icon.y}vh`, `${(icon.y + 10) % 100}vh`, `${icon.y}vh`],
-              x: [`${icon.x}vw`, `${(icon.x + 5) % 100}vw`, `${icon.x}vw`],
+              // Drifting motion with slightly increased variance for the busier field
+              y: [`${icon.y}vh`, `${(icon.y + 15) % 100}vh`, `${icon.y}vh`],
+              x: [`${icon.x}vw`, `${(icon.x + 8) % 100}vw`, `${icon.x}vw`],
               rotate: [icon.rotation, icon.rotation + 360],
               opacity: icon.opacity
             }}
@@ -88,7 +91,7 @@ export default function GrossBackground() {
             style={{
               width: icon.size,
               height: icon.size,
-              filter: `${icon.blur} grayscale(40%)`, // Slight desaturation for depth
+              filter: icon.blur, 
             }}
           >
             <Image
