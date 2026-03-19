@@ -11,8 +11,8 @@ import { GrossOutContainer, ScreenShake } from "@/src/components/GrossOutContain
 import { SlimeBox } from "@/src/components/SlimeBox";
 import { useAudio } from "@/src/components/AudioProvider";
 
-// Define strict type for the resolution data we fetch
-type ResolutionPlayer = Pick<Player, "id" | "player_name" | "is_imposter" | "voted_for" | "room_code">;
+// Updated type to include the clue and sense for the "Autopsy" review
+type ResolutionPlayer = Pick<Player, "id" | "player_name" | "is_imposter" | "voted_for" | "room_code" | "current_clue" | "assigned_sense">;
 
 export default function ResolutionPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
@@ -30,7 +30,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
   const [stealResult, setStealResult] = useState<"pending" | "success" | "failed">("pending");
   const [isFinalizing, setIsFinalizing] = useState(false);
 
-  // Audio trackers
   const [hasPlayedDrumroll, setHasPlayedDrumroll] = useState(false);
   const [hasPlayedReveal, setHasPlayedReveal] = useState(false);
   const [hasPlayedStealAlarm, setHasPlayedStealAlarm] = useState(false);
@@ -61,9 +60,10 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
         if (promptData) setPrompt(promptData as Prompt);
       }
 
+      // Added current_clue and assigned_sense to the select query
       const { data: playersData } = await supabase
         .from("players")
-        .select("id, player_name, is_imposter, voted_for, room_code")
+        .select("id, player_name, is_imposter, voted_for, room_code, current_clue, assigned_sense")
         .eq("room_code", code);
 
       if (!playersData) return;
@@ -98,6 +98,8 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
         (payload) => {
           if (payload.new.game_status === "lobby") {
             router.push(`/room/${code}`);
+          } else if (payload.new.game_status === "game_over") {
+            router.push(`/room/${code}/game-over`);
           }
         }
       )
@@ -162,6 +164,20 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
     await finalizeRoundAction(code, imposter.id, false, false);
   };
 
+  // Helper to calculate score delta for the Autopsy UI
+  const getRoundScore = (p: ResolutionPlayer) => {
+    let roundScore = 0;
+    if (p.is_imposter) {
+      if (!isCaught) roundScore += 2;
+      if (isCaught && stealResult === "success") roundScore += 2;
+    } else {
+      if (p.voted_for === imposter?.id && stealResult !== "success") roundScore += 1;
+      const votesAgainstThem = players.filter(voter => voter.voted_for === p.id).length;
+      if (votesAgainstThem > 0) roundScore -= 1;
+    }
+    return roundScore;
+  };
+
   if (!imposter || isCaught === null) {
     return <div className="flex items-center justify-center h-full font-display text-4xl text-bruise-purple animate-pulse text-outline text-white">TALLYING VOTES...</div>;
   }
@@ -195,9 +211,9 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
   return (
     <ScreenShake trigger={isCaught}>
       <GrossOutContainer delay={0.2}>
-        <div className="flex flex-col h-full p-4 text-center">
+        <div className="flex flex-col h-full p-4 text-center overflow-y-auto pb-8">
           
-          <div className="mt-4 space-y-2 border-b-8 border-bruise-purple pb-6">
+          <div className="mt-4 space-y-2 border-b-8 border-bruise-purple pb-6 shrink-0">
             <p className="font-sans text-bruise-purple/70 font-black uppercase tracking-widest text-xs">The Imposter Was</p>
             <SlimeBox color={isCaught ? "pink" : "yellow"} className="min-h-[140px] z-10">
               <motion.h1 
@@ -231,12 +247,13 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
             )}
           </div>
 
+          {/* Steal Attempt Phase */}
           {isCaught && stealResult === "pending" && (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 1 }}
-              className="flex-grow flex flex-col justify-center gap-4 mt-6"
+              className="flex flex-col justify-center gap-4 mt-6 shrink-0"
             >
               {isMeImposter ? (
                 <>
@@ -280,14 +297,15 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
             </motion.div>
           )}
 
+          {/* Resolution Result & Autopsy */}
           {(stealResult !== "pending" || !isCaught) && (
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 1 }}
-              className="flex-grow flex flex-col justify-center gap-6 mt-4"
+              className="flex flex-col gap-6 mt-4 w-full"
             >
-              <SlimeBox color={stealResult === "success" ? "orange" : "purple"} className="min-h-[140px]">
+              <SlimeBox color={stealResult === "success" ? "orange" : "purple"} className="min-h-[140px] shrink-0">
                 {isCaught ? (
                   <div className="flex flex-col items-center justify-center space-y-2">
                     <p className="font-display text-4xl text-white text-outline leading-none">
@@ -298,23 +316,78 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
                     </p>
                   </div>
                 ) : (
-                  <p className="font-display text-4xl text-white text-outline leading-tight">
-                    THE IMPOSTER SURVIVES TO LIE ANOTHER DAY.
-                  </p>
+                  <div className="flex flex-col items-center justify-center space-y-2">
+                    <p className="font-display text-4xl text-white text-outline leading-tight">
+                      THE IMPOSTER SURVIVES TO LIE ANOTHER DAY.
+                    </p>
+                    <p className="font-sans font-black text-[10px] text-white text-outline uppercase tracking-widest mt-2">
+                      The True Target was: <span className="text-toxic-green text-sm block mt-1">{prompt?.true_target}</span>
+                    </p>
+                  </div>
                 )}
               </SlimeBox>
 
+              {/* POST-MORTEM / AUTOPSY SECTION */}
+              <div className="mt-4 text-left w-full">
+                <h3 className="font-display text-4xl text-fleshy-pink text-outline text-white mb-4 text-center drop-shadow-chunky">THE AUTOPSY</h3>
+                <div className="flex flex-col gap-3">
+                  {players.map(p => {
+                    const voters = players.filter(voter => voter.voted_for === p.id);
+                    
+                    // Client-Side Delta Logic
+                    const delta = getRoundScore(p);
+                    const deltaText = delta > 0 ? `+${delta}` : delta === 0 ? `0` : `${delta}`;
+                    const deltaColor = delta > 0 ? "text-toxic-green" : delta < 0 ? "text-fleshy-pink" : "text-bruise-purple/50 text-outline-none";
+
+                    return (
+                      <div key={p.id} className={`p-4 rounded-xl border-4 border-bruise-purple shadow-chunky bg-white relative ${p.is_imposter ? 'border-warning-yellow ring-4 ring-warning-yellow' : ''}`}>
+                        {p.is_imposter && (
+                          <span className="absolute -top-4 -right-2 text-3xl drop-shadow-chunky rotate-12">😈</span>
+                        )}
+                        <div className="flex justify-between items-start mb-2 border-b-2 border-bruise-purple/10 pb-2">
+                          <div className="flex flex-col">
+                            <span className="font-display text-2xl text-bruise-purple leading-none">
+                              {p.player_name} {p.is_imposter ? "(IMPOSTER)" : ""}
+                            </span>
+                            <span className={`font-display text-xl mt-1 drop-shadow-chunky text-outline ${deltaColor}`}>
+                              {deltaText} PTS
+                            </span>
+                          </div>
+                          <span className="font-sans text-[10px] font-black uppercase bg-toxic-green text-bruise-purple px-2 py-1 rounded-sm border-2 border-bruise-purple shadow-[2px_2px_0px_0px_#12001A]">
+                            {p.assigned_sense}
+                          </span>
+                        </div>
+                        <p className="font-sans text-sm font-bold text-bruise-purple italic">
+                          "{p.current_clue}"
+                        </p>
+                        
+                        {voters.length > 0 && (
+                          <div className="mt-3 bg-bruise-purple/5 p-2 rounded-lg border-2 border-bruise-purple/20">
+                            <p className="font-sans text-[10px] text-fleshy-pink font-black uppercase flex items-center gap-1">
+                              <span>🩸 Voted by:</span> 
+                              <span className="text-bruise-purple">{voters.map(v => v.player_name).join(", ")}</span>
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {isHost && (
-                 <SlimeBox 
-                   color="yellow" 
-                   onClick={handleHostContinue} 
-                   disabled={isFinalizing}
-                   className="!min-h-[100px] mt-4"
-                 >
-                   <span className="font-display text-4xl text-white text-outline">
-                     {isFinalizing ? "RESETTING..." : "RETURN TO LOBBY"}
-                   </span>
-                 </SlimeBox>
+                 <div className="sticky bottom-4 pt-4 mt-4 w-full">
+                   <SlimeBox 
+                     color="yellow" 
+                     onClick={handleHostContinue} 
+                     disabled={isFinalizing}
+                     className="!min-h-[100px]"
+                   >
+                     <span className="font-display text-4xl text-white text-outline">
+                       {isFinalizing ? "CONTINUE..." : "CONTINUE"}
+                     </span>
+                   </SlimeBox>
+                 </div>
               )}
             </motion.div>
           )}

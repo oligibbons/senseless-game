@@ -9,6 +9,7 @@ import { closeRoomAction, updateSettingsAction, playAgainAction } from "@/src/ap
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { GrossOutContainer } from "@/src/components/GrossOutContainer";
 import { SlimeBox } from "@/src/components/SlimeBox";
+import { MeatSackLoader } from "@/src/components/MeatSackLoader";
 import Image from "next/image";
 import { useAudio } from "@/src/components/AudioProvider";
 
@@ -70,7 +71,6 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
           if (payload.eventType === "INSERT") {
             setPlayers((prev) => {
               const newPlayer = payload.new as Player;
-              // Prevent duplicates if local state already has them
               if (prev.some(p => p.id === newPlayer.id)) return prev;
               
               const newPlayersList = [...prev, newPlayer];
@@ -123,13 +123,19 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
       <div className="flex flex-col items-center justify-center h-full p-6 text-center space-y-6">
         <h1 className="font-display text-5xl text-fleshy-pink text-outline drop-shadow-chunky text-balance">ROOM CLOSED</h1>
         <p className="font-sans text-bruise-purple font-bold text-xl">{errorMsg}</p>
-        <button onClick={() => router.replace("/")} className="bg-bruise-purple text-toxic-green font-display text-3xl px-8 py-3 rounded-xl shadow-chunky">Go Home</button>
+        <button onClick={() => router.replace("/")} className="bg-bruise-purple text-toxic-green font-display text-3xl px-8 py-3 rounded-xl shadow-chunky transition-transform active:scale-95">Go Home</button>
       </div>
     );
   }
 
   if (!room || !currentPlayerId) {
-    return <div className="flex items-center justify-center h-full font-display text-3xl text-fleshy-pink text-outline animate-pulse">CONNECTING...</div>;
+    return (
+      <MeatSackLoader className="flex items-center justify-center h-full">
+        <div className="font-display text-4xl text-fleshy-pink text-outline drop-shadow-chunky">
+          CONNECTING...
+        </div>
+      </MeatSackLoader>
+    );
   }
 
   const isHost = room.host_id === currentPlayerId;
@@ -253,7 +259,21 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                       <span className="text-[10px] text-outline uppercase font-black tracking-tighter mt-1">(You)</span>
                     )}
                   </div>
-                  <div className="text-right text-white">
+                  <div className="text-right text-white relative">
+                    {/* Score Delta Animation */}
+                    {player.last_score_delta !== null && player.last_score_delta !== 0 && room.current_round > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20, scale: 0.5, rotate: -15 }}
+                        animate={{ opacity: 1, y: -10, scale: 1, rotate: 0 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 10, delay: 0.5 + (idx * 0.1) }}
+                        className={`absolute -left-10 -top-2 font-display text-4xl text-outline drop-shadow-chunky ${
+                          player.last_score_delta > 0 ? "text-toxic-green" : "text-fleshy-pink"
+                        }`}
+                      >
+                        {player.last_score_delta > 0 ? "+" : ""}{player.last_score_delta}
+                      </motion.div>
+                    )}
+
                     <span className="font-display text-3xl block leading-none text-outline">{player.score}</span>
                     <span className="font-sans text-[10px] font-black uppercase opacity-90 text-outline block mt-1">PTS</span>
                   </div>
@@ -338,9 +358,11 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                 </span>
              </SlimeBox>
           ) : (
-            <SlimeBox color="pink" className="!min-h-[90px] !p-4 animate-pulse">
-               <span className="font-display text-2xl text-white text-outline leading-none tracking-wider">WAITING FOR HOST...</span>
-            </SlimeBox>
+            <MeatSackLoader>
+              <SlimeBox color="pink" className="!min-h-[90px] !p-4">
+                 <span className="font-display text-2xl text-white text-outline leading-none tracking-wider">WAITING FOR HOST...</span>
+              </SlimeBox>
+            </MeatSackLoader>
           )}
         </div>
       </div>

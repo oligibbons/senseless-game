@@ -6,18 +6,17 @@ import { supabase } from "@/src/lib/supabase";
 import { submitClueAction } from "@/src/app/actions/writing";
 import { SlimeBox } from "@/src/components/SlimeBox";
 import { useAudio } from "@/src/components/AudioProvider";
-import { motion } from "framer-motion";
+import { motion, useAnimation } from "framer-motion";
 import { Player } from "@/src/types/database";
 
-const SENSE_UI: Record<string, { icon: string; label: string; color: string }> = {
-  Sight: { icon: "👁️", label: "BLOODSHOT EYES", color: "text-fleshy-pink" },
-  Sound: { icon: "👂", label: "OOZING EARS", color: "text-bruise-purple" },
-  Smell: { icon: "👃", label: "HAIRY NOSE", color: "text-toxic-green" },
-  Touch: { icon: "🖐️", label: "BLISTERED HANDS", color: "text-fleshy-pink" },
-  Taste: { icon: "👅", label: "SLOBBERING TONGUE", color: "text-warning-yellow" },
+const SENSE_UI: Record<string, { icon: string; verb: string; color: string }> = {
+  Sight: { icon: "👁️", verb: "LOOK", color: "text-fleshy-pink" },
+  Sound: { icon: "👂", verb: "SOUND", color: "text-bruise-purple" },
+  Smell: { icon: "👃", verb: "SMELL", color: "text-toxic-green" },
+  Touch: { icon: "🖐️", verb: "FEEL", color: "text-fleshy-pink" },
+  Taste: { icon: "👅", verb: "TASTE", color: "text-warning-yellow" },
 };
 
-// Define strict type for the specific columns we fetch
 type WritingPlayer = Pick<Player, "is_imposter" | "assigned_sense" | "current_clue">;
 
 export default function WritingPage({ params }: { params: Promise<{ code: string }> }) {
@@ -33,6 +32,9 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [hasRevealed, setHasRevealed] = useState(false);
+
+  // Framer Motion controller for the aggressive error shake
+  const inputShakeControls = useAnimation();
 
   useEffect(() => {
     const localId = localStorage.getItem("senseless_player_id");
@@ -120,6 +122,17 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
     }
   };
 
+  // Intercept keystrokes to trigger the violent shake if they hit the limit
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (clue.length >= 50 && e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+      playSFX("ui_error");
+      inputShakeControls.start({
+        x: [-12, 12, -10, 10, -5, 5, 0],
+        transition: { duration: 0.4, type: "spring", stiffness: 500 }
+      });
+    }
+  };
+
   if (!target || !sense) {
     return (
       <div className="flex items-center justify-center h-full font-display text-4xl text-bruise-purple animate-pulse">
@@ -130,6 +143,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
 
   const activeSense = SENSE_UI[sense];
   const charsLeft = 50 - clue.length;
+  const isDangerZone = charsLeft <= 10;
 
   if (isSubmitted) {
     return (
@@ -137,9 +151,9 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
         <h1 className="font-display text-6xl text-fleshy-pink text-outline drop-shadow-chunky">CLUE LOCKED</h1>
         <p className="font-sans text-bruise-purple text-xl font-bold">Waiting for the other meat-sacks...</p>
         <motion.div 
-          animate={{ y: [0, -20, 0] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="text-8xl"
+          animate={{ y: [0, -20, 0], scale: [1, 1.05, 1] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          className="text-8xl drop-shadow-chunky"
         >
           {activeSense.icon}
         </motion.div>
@@ -155,42 +169,47 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
         </div>
       )}
 
-      <div className="text-center mt-2 mb-2 flex flex-col items-center">
-        <p className="font-sans text-bruise-purple font-black uppercase tracking-widest text-sm mb-[-10px] z-10 text-outline text-white">Your Target Is:</p>
-        <SlimeBox color="yellow" className="min-h-[120px]">
-          <h1 className="font-display text-5xl text-white text-outline drop-shadow-chunky leading-tight">
-            {target}
+      <div className="text-center mt-2 mb-6 flex flex-col items-center w-full">
+        <SlimeBox color="yellow" className="min-h-[160px] !p-6 w-full">
+          <h1 className="font-display text-4xl sm:text-5xl text-white text-outline drop-shadow-chunky leading-tight uppercase">
+            WHAT DOES <span className={activeSense.color}>{target}</span> {activeSense.verb} LIKE?
           </h1>
         </SlimeBox>
-      </div>
-
-      <div className="text-center mb-6 flex flex-col items-center">
-        <p className="font-sans text-bruise-purple/70 font-black uppercase tracking-widest text-xs mb-2">Describe it using only your:</p>
-        <div className="text-6xl mb-1">{activeSense.icon}</div>
-        <h2 className={`font-display text-4xl ${activeSense.color} text-outline tracking-widest drop-shadow-chunky`}>
-          {activeSense.label}
-        </h2>
+        <motion.div
+          animate={{ scale: [1, 1.1, 1], rotate: [-5, 5, -5] }}
+          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          className="text-[100px] mt-2 drop-shadow-chunky"
+        >
+          {activeSense.icon}
+        </motion.div>
       </div>
 
       <div className="mt-auto flex flex-col gap-4">
-        <div className="relative">
+        <motion.div animate={inputShakeControls} className="relative">
           <textarea
             value={clue}
             onChange={(e) => setClue(e.target.value)}
+            onKeyDown={handleKeyDown}
             maxLength={50}
             disabled={isSubmitting}
             placeholder="Type your clue here..."
-            className="w-full h-32 bg-white text-bruise-purple font-sans font-bold text-2xl p-4 rounded-xl border-8 border-bruise-purple shadow-chunky focus:outline-none focus:border-fleshy-pink resize-none disabled:opacity-50"
+            className={`w-full h-32 bg-white text-bruise-purple font-sans font-bold text-2xl p-4 rounded-xl border-8 shadow-chunky focus:outline-none resize-none disabled:opacity-50 transition-colors ${
+              isDangerZone ? "border-fleshy-pink focus:border-warning-yellow" : "border-bruise-purple focus:border-toxic-green"
+            }`}
           />
-          <span className={`absolute bottom-4 right-4 font-display text-2xl ${charsLeft <= 10 ? 'text-fleshy-pink animate-pulse' : 'text-bruise-purple/40'}`}>
+          <motion.span 
+            animate={isDangerZone ? { scale: [1, 1.3, 1], color: ["#FF007F", "#FFD700", "#FF007F"] } : { scale: 1, color: "rgba(18, 0, 26, 0.4)" }}
+            transition={isDangerZone ? { repeat: Infinity, duration: 0.5, ease: "easeInOut" } : {}}
+            className="absolute bottom-4 right-4 font-display text-3xl"
+          >
             {charsLeft}
-          </span>
-        </div>
+          </motion.span>
+        </motion.div>
 
         <button
           onClick={handleSubmit}
           disabled={isSubmitting || clue.trim().length === 0}
-          className="w-full bg-toxic-green text-white text-outline font-display text-4xl py-4 rounded-xl shadow-chunky border-4 border-bruise-purple disabled:opacity-50"
+          className="w-full bg-toxic-green text-white text-outline font-display text-4xl py-4 rounded-xl shadow-chunky border-4 border-bruise-purple disabled:opacity-50 transition-transform active:scale-95"
         >
           {isSubmitting ? "LOCKING..." : "Lock Clue"}
         </button>

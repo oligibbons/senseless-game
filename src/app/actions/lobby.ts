@@ -1,3 +1,4 @@
+// src/app/actions/lobby.ts
 "use server";
 
 import { supabase } from "@/src/lib/supabase";
@@ -32,13 +33,27 @@ export async function playAgainAction(roomCode: string, hostId: string) {
     const { data: room } = await supabase.from("rooms").select("host_id").eq("room_code", roomCode).single();
     if (room?.host_id !== hostId) throw new Error("Only the host can restart the game.");
 
-    // 1. Reset Room Rounds
-    await supabase.from("rooms").update({ current_round: 0 }).eq("room_code", roomCode);
+    // 1. Reset Room Rounds and Status
+    await supabase.from("rooms").update({ 
+      current_round: 0,
+      game_status: "lobby",
+      current_prompt_id: null
+    }).eq("room_code", roomCode);
 
-    // 2. Reset Player Scores
+    // 2. Deep Reset Player Scores and Stats
     const { data: players } = await supabase.from("players").select("id").eq("room_code", roomCode);
     if (players) {
-      const updates = players.map(p => supabase.from("players").update({ score: 0 }).eq("id", p.id));
+      const updates = players.map(p => 
+        supabase.from("players").update({ 
+          score: 0,
+          stats: null,
+          current_clue: null,
+          voted_for: null,
+          assigned_sense: null,
+          is_imposter: false,
+          last_score_delta: null // Reset the delta tracker
+        }).eq("id", p.id)
+      );
       await Promise.all(updates);
     }
     return { success: true };
