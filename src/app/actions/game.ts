@@ -101,3 +101,44 @@ export async function startGameAction(roomCode: string, hostId: string) {
     return { success: false, error: error.message || "Unknown error occurred" };
   }
 }
+
+/**
+ * FIXED EXPORT: Added submitVoteAction to resolve Turbopack build error.
+ * Handles updating the voter's choice and checking for round transition.
+ */
+export async function submitVoteAction(roomCode: string, voterId: string, targetId: string) {
+  try {
+    const { error: updateError } = await supabase
+      .from("players")
+      .update({
+        voted_for: targetId
+      })
+      .eq("id", voterId);
+
+    if (updateError) throw updateError;
+
+    // Check if all players in the room have cast a vote
+    const { data: players, error: playersError } = await supabase
+      .from("players")
+      .select("voted_for")
+      .eq("room_code", roomCode);
+
+    if (playersError) throw playersError;
+
+    const allVoted = players?.every(p => p.voted_for !== null);
+
+    if (allVoted) {
+      const { error: statusError } = await supabase
+        .from("rooms")
+        .update({ game_status: "resolution" })
+        .eq("room_code", roomCode);
+
+      if (statusError) throw statusError;
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("Vote Submission Error:", error);
+    return { success: false, error: error.message || "Unknown error occurred" };
+  }
+}
