@@ -145,7 +145,9 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
   }, [stealResult, hasPlayedStealResult, playSFX]);
 
   const handleStealAttempt = async () => {
+    // FIX: Combined the null checks to ensure 'imposter' is not null for the Action call
     if (!imposter || !prompt || isFinalizing) return;
+    
     playSFX("ui_splat");
     setIsFinalizing(true);
 
@@ -162,14 +164,29 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
     }
 
     setStealResult(success ? "success" : "failed");
-    await finalizeRoundAction(code, imposter.id, true, success);
+    
+    try {
+      // TypeScript now knows 'imposter.id' is a string
+      await finalizeRoundAction(code, imposter.id, true, success);
+    } catch (error) {
+      console.error("Failed to finalize steal:", error);
+      setIsFinalizing(false);
+    }
   };
 
   const handleHostContinue = async () => {
+    // FIX: Added !imposter check to narrow the type for the Action call
     if (!imposter || isFinalizing) return;
+    
     playSFX("ui_splat");
     setIsFinalizing(true);
-    await finalizeRoundAction(code, imposter.id, false, false);
+    
+    try {
+      await finalizeRoundAction(code, imposter.id, false, false);
+    } catch (error) {
+      console.error("Failed to continue:", error);
+      setIsFinalizing(false);
+    }
   };
 
   const getRoundScore = (p: ResolutionPlayer) => {
@@ -294,7 +311,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
                     color="orange" 
                     onClick={handleStealAttempt} 
                     disabled={isFinalizing || stealGuess.length < 2}
-                    className="!min-h-[100px] mt-2"
+                    className="!min-h-[100px] mt-2 cursor-pointer"
                   >
                     <span className="font-display text-4xl text-white text-outline uppercase">
                       {isFinalizing ? "Checking..." : "Attempt Steal"}
@@ -390,7 +407,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
                      color="yellow" 
                      onClick={handleHostContinue} 
                      disabled={isFinalizing}
-                     className="!min-h-[100px]"
+                     className="!min-h-[100px] cursor-pointer"
                    >
                      <span className="font-display text-4xl text-white text-outline uppercase">
                        {isFinalizing ? "Resetting..." : "Continue"}

@@ -148,7 +148,8 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
     : sortedPlayers.length > 0 && sortedPlayers[0].score >= room.round_settings.target;
 
   const handleStartGame = async () => {
-    if (!isHost || !canStart || isStarting) return;
+    // Added safety check for currentPlayerId to satisfy TypeScript string requirement
+    if (!isHost || !canStart || isStarting || !currentPlayerId) return;
     playSFX("lobby_start");
     setIsStarting(true);
     const result = await startGameAction(code, currentPlayerId);
@@ -159,18 +160,19 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
   };
 
   const handleNukeRoom = async () => {
-    if (!isHost) return;
+    if (!isHost || !currentPlayerId) return;
     playSFX("lobby_nuke");
     await closeRoomAction(code, currentPlayerId);
   };
 
   const handleUpdateSettings = async (mode: 'rounds' | 'score', val: number) => {
-    if (!isHost) return;
+    if (!isHost || !currentPlayerId) return;
     await updateSettingsAction(code, currentPlayerId, mode, val);
   };
 
   const handlePlayAgain = async () => {
-    if (!isHost) return;
+    // Added safety check for currentPlayerId to satisfy TypeScript string requirement
+    if (!isHost || !currentPlayerId) return;
     playSFX("lobby_start");
     await playAgainAction(code, currentPlayerId);
   };
@@ -301,7 +303,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                 <p className="font-display text-3xl text-fleshy-pink text-outline drop-shadow-chunky uppercase">Winner: {sortedPlayers[0]?.player_name}</p>
               </div>
               {isHost && (
-                <SlimeBox color="yellow" onClick={handlePlayAgain} className="!min-h-[90px] !p-4">
+                <SlimeBox color="yellow" onClick={handlePlayAgain} className="!min-h-[90px] !p-4 cursor-pointer">
                    <span className="font-display text-4xl text-white text-outline leading-none uppercase">Play Again</span>
                 </SlimeBox>
               )}
@@ -311,7 +313,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                color="blue" 
                onClick={handleStartGame} 
                disabled={!canStart || isStarting}
-               className="!min-h-[90px] !p-4"
+               className="!min-h-[90px] !p-4 cursor-pointer"
              >
                 <span className="font-display text-3xl text-white text-outline tracking-wider leading-none uppercase">
                   {isStarting ? "DEALING..." : room.current_round === 0 ? "START GAME" : "NEXT ROUND"}

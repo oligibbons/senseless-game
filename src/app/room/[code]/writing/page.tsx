@@ -108,17 +108,27 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   }, [target, sense, hasRevealed, isSubmitted, playSFX]);
 
   const handleSubmit = async () => {
-    if (!playerId || clue.trim().length === 0) return;
+    // --- FIX ---
+    // This check ensures 'playerId' is a string before the action call.
+    if (!playerId || clue.trim().length === 0 || isSubmitting) return;
+    
     playSFX("ui_splat");
     setIsSubmitting(true);
     setErrorMsg("");
 
-    const result = await submitClueAction(playerId, code, clue);
+    try {
+      // TypeScript now knows 'playerId' is string, not null.
+      const result = await submitClueAction(playerId, code, clue);
 
-    if (result.success) {
-      setIsSubmitted(true);
-    } else {
-      setErrorMsg(result.error || "Failed to submit clue.");
+      if (result.success) {
+        setIsSubmitted(true);
+      } else {
+        setErrorMsg(result.error || "Failed to submit clue.");
+        setIsSubmitting(false);
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("A brain-fart occurred. Try again.");
       setIsSubmitting(false);
     }
   };
@@ -213,7 +223,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
           color="green" 
           onClick={handleSubmit} 
           disabled={isSubmitting || clue.trim().length === 0}
-          className="!min-h-[100px]"
+          className="!min-h-[100px] cursor-pointer"
         >
           <span className="font-display text-4xl text-white text-outline uppercase">
             {isSubmitting ? "Locking..." : "Lock Clue"}

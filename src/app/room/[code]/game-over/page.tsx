@@ -189,10 +189,20 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
   }, [code, router]);
 
   const handlePlayAgain = async () => {
-    if (playerId !== hostId || isResetting) return;
+    // --- FIX APPLIED HERE ---
+    // Added 'hostId' to the check. TypeScript now knows 'hostId' 
+    // is a string if the code continues past this line.
+    if (playerId !== hostId || isResetting || !hostId) return;
+    
     playSFX("lobby_start");
     setIsResetting(true);
-    await playAgainAction(code, hostId);
+    
+    try {
+      await playAgainAction(code, hostId);
+    } catch (error) {
+      console.error("Failed to reset:", error);
+      setIsResetting(false);
+    }
   };
 
   const handleReturnToMenu = () => {
@@ -288,7 +298,7 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
                color="blue" 
                onClick={handlePlayAgain} 
                disabled={isResetting}
-               className="!min-h-[90px] !p-2"
+               className="!min-h-[90px] !p-2 cursor-pointer"
              >
                 <span className="font-display text-4xl text-white text-outline tracking-wider leading-none uppercase">
                   {isResetting ? "RESETTING..." : "PLAY AGAIN"}

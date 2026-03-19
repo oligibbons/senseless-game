@@ -3,36 +3,26 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
-import { submitVoteAction } from "@/src/app/actions/voting"; 
-import { motion, Variants, AnimatePresence } from "framer-motion";
+import { submitVoteAction } from "@/src/app/actions/game"; // Adjust if your action name differs
+import { Player, Room } from "@/src/types/database";
+import { motion, AnimatePresence, Variants } from "framer-motion";
 import { GrossOutContainer } from "@/src/components/GrossOutContainer";
 import { SlimeBox } from "@/src/components/SlimeBox";
+import { GameIcon } from "@/src/components/GameIcon";
 import { MeatSackLoader } from "@/src/components/MeatSackLoader";
-import { GameIcon, IconType } from "@/src/components/GameIcon";
 import { useAudio } from "@/src/components/AudioProvider";
-import { Player } from "@/src/types/database";
-
-// Mapping the database Sense string to our bespoke GameIcon types
-const senseToIcon: Record<string, IconType> = {
-  Sight: "sight",
-  Sound: "sound",
-  Smell: "smell",
-  Touch: "touch",
-  Taste: "taste",
-};
-
-type VotingPlayer = Pick<Player, "id" | "player_name" | "current_clue" | "assigned_sense" | "voted_for">;
 
 export default function VotingPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
   const router = useRouter();
   const { playSFX } = useAudio();
 
+  const [room, setRoom] = useState<Room | null>(null);
+  const [players, setPlayers] = useState<Player[]>([]);
   const [playerId, setPlayerId] = useState<string | null>(null);
-  const [players, setPlayers] = useState<VotingPlayer[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [hasVoted, setHasVoted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasVoted, setHasVoted] = useState(false);
 
   useEffect(() => {
     const localId = localStorage.getItem("senseless_player_id");
@@ -42,37 +32,52 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     }
     setPlayerId(localId);
 
-    const loadVotingData = async () => {
+    const fetchData = async () => {
+      const { data: roomData } = await supabase
+        .from("rooms")
+        .select("*")
+        .eq("room_code", code)
+        .single();
+
+      if (roomData) {
+        setRoom(roomData as Room);
+        if (roomData.game_status !== "voting") {
+          router.push(`/room/${code}/${roomData.game_status}`);
+        }
+      }
+
       const { data: playersData } = await supabase
         .from("players")
-        .select("id, player_name, current_clue, assigned_sense, voted_for")
+        .select("*")
         .eq("room_code", code);
 
       if (playersData) {
-        const typedPlayers = playersData as VotingPlayer[];
-        setPlayers(typedPlayers);
-        
-        // Handle persistent state recovery
-        const me = typedPlayers.find(p => p.id === localId);
-        if (me && me.voted_for) {
-          setHasVoted(true);
-        }
+        setPlayers(playersData as Player[]);
+        // Check if this specific player has already voted in this round
+        const me = playersData.find(p => p.id === localId);
+        if (me?.has_voted) setHasVoted(true);
       }
     };
 
-    loadVotingData();
+    fetchData();
 
-    // Listen for the host to transition the game status to resolution
     const channel = supabase
       .channel(`voting_${code}`)
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "rooms", filter: `room_code=eq.${code}` },
         (payload) => {
-          if (payload.new.game_status === "resolution") {
-            router.push(`/room/${code}/resolution`);
+          const updatedRoom = payload.new as Room;
+          setRoom(updatedRoom);
+          if (updatedRoom.game_status === "results") {
+            router.push(`/room/${code}/results`);
           }
         }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "players", filter: `room_code=eq.${code}` },
+        () => fetchData()
       )
       .subscribe();
 
@@ -81,148 +86,132 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     };
   }, [code, router]);
 
-  const handleSelectClue = (targetId: string) => {
-    if (hasVoted || isSubmitting) return;
-    
-    if (selectedId !== targetId) {
-      playSFX("ui_squish");
-      setSelectedId(targetId);
-    }
-  };
+  const handleVote = async () => {
+    // --- CRITICAL FIX ---
+    // Ensure both IDs are not null before calling the action.
+    // This tells TypeScript these are definitely strings.
+    if (!playerId || !selectedId || isSubmitting || hasVoted) return;
 
-  const handleLockVote = async () => {
-    if (!playerId || !selectedId || hasVoted || isSubmitting) return;
-    
-    playSFX("vote_cast"); 
+    playSFX("ui_squish");
     setIsSubmitting(true);
-    
-    const result = await submitVoteAction(playerId, selectedId, code);
-    
-    if (result.success) {
-      setHasVoted(true);
-    } else {
+
+    try {
+      const result = await submitVoteAction(code, playerId, selectedId);
+      if (result.success) {
+        setHasVoted(true);
+      } else {
+        console.error(result.error);
+        setIsSubmitting(false);
+      }
+    } catch (err) {
+      console.error("Voting failed:", err);
       setIsSubmitting(false);
     }
   };
 
-  // Prevent players from voting for themselves
-  const votablePlayers = players.filter(p => p.id !== playerId);
-
-  const containerVariants: Variants = {
-    hidden: { opacity: 0 },
-    show: { opacity: 1, transition: { staggerChildren: 0.15 } }
-  };
-
-  const itemVariants: Variants = {
-    hidden: { opacity: 0, y: 50, scale: 0.9 },
-    show: { 
-      opacity: 1, 
-      y: 0, 
-      scale: 1, 
-      transition: { type: "spring", stiffness: 300, damping: 20 } 
-    }
-  };
-
-  const boxColors: ("pink" | "blue" | "green" | "purple" | "orange" | "yellow")[] = ["blue", "purple", "orange", "pink", "green", "yellow"];
-
-  if (players.length === 0) {
+  if (!room || !playerId || players.length === 0) {
     return (
       <MeatSackLoader className="flex items-center justify-center h-full">
-        <div className="font-display text-4xl text-fleshy-pink text-outline drop-shadow-chunky">GATHERING CLUES...</div>
+        <div className="font-display text-4xl text-fleshy-pink text-outline uppercase">
+          Sniffing out the imposter...
+        </div>
       </MeatSackLoader>
     );
   }
 
-  if (hasVoted) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-6 text-center space-y-8">
-        <h1 className="font-display text-6xl text-toxic-green text-outline drop-shadow-chunky uppercase">VOTE LOCKED</h1>
-        <MeatSackLoader>
-          <div className="flex flex-col items-center gap-6">
-            <GameIcon type="splat" size={160} />
-            <p className="font-display text-3xl text-white text-outline tracking-wider">Waiting for others to judge...</p>
-          </div>
-        </MeatSackLoader>
-      </div>
-    );
-  }
+  const otherPlayers = players.filter(p => p.id !== playerId);
+
+  const containerVariants: Variants = {
+    hidden: { opacity: 0 },
+    show: { opacity: 1, transition: { staggerChildren: 0.1 } }
+  };
+
+  const itemVariants: Variants = {
+    hidden: { opacity: 0, scale: 0.9, y: 20 },
+    show: { opacity: 1, scale: 1, y: 0 }
+  };
 
   return (
-    <GrossOutContainer delay={0.1}>
-      <div className="flex flex-col h-full p-4 relative z-10">
-        
-        <div className="text-center mt-2 mb-4 shrink-0">
-          <h1 className="font-display text-5xl text-warning-yellow text-outline drop-shadow-chunky uppercase leading-none">
-            WHO IS THE IMPOSTER?
-          </h1>
-          <p className="font-sans text-white font-black uppercase tracking-widest text-[10px] text-outline mt-2">
-            Tap a clue to select your target
+    <GrossOutContainer>
+      <div className="flex flex-col h-full p-4 text-center">
+        <div className="mt-6 mb-4">
+          <motion.h1 
+            initial={{ rotate: -2 }}
+            animate={{ rotate: 2 }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            className="font-display text-5xl text-warning-yellow text-outline text-white uppercase leading-none"
+          >
+            WHO IS SENSELESS?
+          </motion.h1>
+          <p className="font-sans text-white font-black text-xs uppercase mt-2 tracking-widest bg-bruise-purple inline-block px-3 py-1 rounded-full border-2 border-white">
+            Find the Imposter
           </p>
         </div>
 
-        <motion.div 
-          variants={containerVariants}
-          initial="hidden"
-          animate="show"
-          className="flex-grow flex flex-col gap-4 overflow-y-auto pb-6 px-1"
-        >
-          {votablePlayers.map((p, idx) => {
-            const isSelected = selectedId === p.id;
-            const isOtherSelected = selectedId !== null && !isSelected;
-            
-            return (
-              <motion.div
-                key={p.id}
-                variants={itemVariants}
-                onClick={() => handleSelectClue(p.id)}
-                animate={{
-                  scale: isSelected ? 1.05 : isOtherSelected ? 0.92 : 1,
-                  filter: isOtherSelected ? "blur(6px)" : "blur(0px)",
-                  opacity: isOtherSelected ? 0.6 : 1,
-                  rotate: isSelected ? (idx % 2 === 0 ? 1 : -1) : 0
-                }}
-                transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                className="relative cursor-pointer"
-              >
-                <SlimeBox 
-                  color={isSelected ? "yellow" : boxColors[idx % boxColors.length]} 
-                  className={`!min-h-[120px] transition-all duration-300 ${isSelected ? 'ring-8 ring-white' : ''}`}
-                >
-                  <div className="flex justify-between items-center w-full px-2">
-                    <div className="flex flex-col text-left max-w-[70%]">
-                      <span className="font-display text-2xl text-white text-outline leading-none mb-1">
-                        {p.player_name}
-                      </span>
-                      <p className="font-sans text-lg font-bold text-white text-outline leading-tight italic">
-                        "{p.current_clue}"
-                      </p>
+        <AnimatePresence mode="wait">
+          {!hasVoted ? (
+            <motion.div 
+              key="voting-grid"
+              variants={containerVariants}
+              initial="hidden"
+              animate="show"
+              className="flex-grow flex flex-col gap-3 overflow-y-auto pb-6 px-1"
+            >
+              {otherPlayers.map((player) => (
+                <motion.div key={player.id} variants={itemVariants}>
+                  <SlimeBox
+                    color={selectedId === player.id ? "yellow" : "purple"}
+                    onClick={() => setSelectedId(player.id)}
+                    className={`!p-4 transition-all ${selectedId === player.id ? "scale-105 border-white border-4" : "opacity-90"}`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <div className="text-left">
+                        <h3 className="font-display text-2xl text-white text-outline leading-none uppercase">
+                          {player.player_name}
+                        </h3>
+                        <p className="font-sans text-[10px] text-white font-bold opacity-80 mt-1 uppercase italic">
+                          "{player.current_clue || "Thinking..."}"
+                        </p>
+                      </div>
+                      <GameIcon type="imposter" size={40} className={selectedId === player.id ? "opacity-100" : "opacity-30"} />
                     </div>
-                    
-                    <GameIcon 
-                      type={senseToIcon[p.assigned_sense || "Sight"]} 
-                      size={70} 
-                      className="drop-shadow-chunky"
-                    />
-                  </div>
-                </SlimeBox>
-              </motion.div>
-            );
-          })}
-        </motion.div>
+                  </SlimeBox>
+                </motion.div>
+              ))}
+            </motion.div>
+          ) : (
+            <motion.div 
+              key="waiting"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex-grow flex flex-col items-center justify-center gap-6"
+            >
+              <SlimeBox color="blue" className="!p-8 animate-pulse">
+                <h2 className="font-display text-4xl text-white text-outline leading-none mb-4 uppercase">
+                  Accusation Cast!
+                </h2>
+                <p className="font-sans text-white font-bold text-sm text-outline">
+                  Waiting for the other meat-sacks to point fingers...
+                </p>
+              </SlimeBox>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        <div className="mt-auto pt-2 shrink-0">
-          <SlimeBox 
-            color="pink" 
-            onClick={handleLockVote} 
-            disabled={!selectedId || isSubmitting} 
-            className="!min-h-[100px]"
-          >
-            <span className="font-display text-4xl text-white text-outline uppercase">
-              {isSubmitting ? "LOCKING..." : "LOCK IN VOTE"}
-            </span>
-          </SlimeBox>
+        <div className="mt-auto pt-2">
+          {!hasVoted && (
+            <SlimeBox
+              color="green"
+              onClick={handleVote}
+              disabled={!selectedId || isSubmitting}
+              className={`!min-h-[90px] !p-4 transition-all ${!selectedId ? 'grayscale opacity-50' : 'cursor-pointer'}`}
+            >
+              <span className="font-display text-4xl text-white text-outline uppercase">
+                {isSubmitting ? "Accusing..." : "VOTE NOW"}
+              </span>
+            </SlimeBox>
+          )}
         </div>
-
       </div>
     </GrossOutContainer>
   );
