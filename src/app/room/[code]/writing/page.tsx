@@ -8,13 +8,15 @@ import { SlimeBox } from "@/src/components/SlimeBox";
 import { useAudio } from "@/src/components/AudioProvider";
 import { motion, useAnimation } from "framer-motion";
 import { Player } from "@/src/types/database";
+import { GameIcon, IconType } from "@/src/components/GameIcon";
+import { MeatSackLoader } from "@/src/components/MeatSackLoader";
 
-const SENSE_UI: Record<string, { icon: string; verb: string; color: string }> = {
-  Sight: { icon: "👁️", verb: "LOOK", color: "text-fleshy-pink" },
-  Sound: { icon: "👂", verb: "SOUND", color: "text-bruise-purple" },
-  Smell: { icon: "👃", verb: "SMELL", color: "text-toxic-green" },
-  Touch: { icon: "🖐️", verb: "FEEL", color: "text-fleshy-pink" },
-  Taste: { icon: "👅", verb: "TASTE", color: "text-warning-yellow" },
+const SENSE_UI: Record<string, { icon: IconType; verb: string; color: string }> = {
+  Sight: { icon: "sight", verb: "LOOK", color: "text-fleshy-pink" },
+  Sound: { icon: "sound", verb: "SOUND", color: "text-bruise-purple" },
+  Smell: { icon: "smell", verb: "SMELL", color: "text-toxic-green" },
+  Touch: { icon: "touch", verb: "FEEL", color: "text-fleshy-pink" },
+  Taste: { icon: "taste", verb: "TASTE", color: "text-warning-yellow" },
 };
 
 type WritingPlayer = Pick<Player, "is_imposter" | "assigned_sense" | "current_clue">;
@@ -33,7 +35,6 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   const [errorMsg, setErrorMsg] = useState("");
   const [hasRevealed, setHasRevealed] = useState(false);
 
-  // Framer Motion controller for the aggressive error shake
   const inputShakeControls = useAnimation();
 
   useEffect(() => {
@@ -122,7 +123,6 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
     }
   };
 
-  // Intercept keystrokes to trigger the violent shake if they hit the limit
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (clue.length >= 50 && e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
       playSFX("ui_error");
@@ -135,9 +135,11 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
 
   if (!target || !sense) {
     return (
-      <div className="flex items-center justify-center h-full font-display text-4xl text-bruise-purple animate-pulse">
-        EXTRACTING DATA...
-      </div>
+      <MeatSackLoader className="flex items-center justify-center h-full">
+        <div className="font-display text-4xl text-bruise-purple text-outline text-white uppercase">
+          Extracting Data...
+        </div>
+      </MeatSackLoader>
     );
   }
 
@@ -148,15 +150,11 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   if (isSubmitted) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6 text-center space-y-8">
-        <h1 className="font-display text-6xl text-fleshy-pink text-outline drop-shadow-chunky">CLUE LOCKED</h1>
-        <p className="font-sans text-bruise-purple text-xl font-bold">Waiting for the other meat-sacks...</p>
-        <motion.div 
-          animate={{ y: [0, -20, 0], scale: [1, 1.05, 1] }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-          className="text-8xl drop-shadow-chunky"
-        >
-          {activeSense.icon}
-        </motion.div>
+        <h1 className="font-display text-6xl text-fleshy-pink text-outline drop-shadow-chunky uppercase">Clue Locked</h1>
+        <MeatSackLoader className="flex flex-col items-center gap-6">
+          <GameIcon type={activeSense.icon} size={150} />
+          <p className="font-sans text-bruise-purple text-xl font-bold uppercase">Waiting for the others...</p>
+        </MeatSackLoader>
       </div>
     );
   }
@@ -164,7 +162,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   return (
     <div className="flex flex-col h-full p-4 relative z-10">
       {errorMsg && (
-        <div className="bg-warning-yellow text-bruise-purple font-bold p-3 rounded-xl text-center mb-4 border-4 border-bruise-purple">
+        <div className="bg-warning-yellow text-bruise-purple font-bold p-3 rounded-xl text-center mb-4 border-4 border-bruise-purple shadow-chunky uppercase">
           {errorMsg}
         </div>
       )}
@@ -172,15 +170,20 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
       <div className="text-center mt-2 mb-6 flex flex-col items-center w-full">
         <SlimeBox color="yellow" className="min-h-[160px] !p-6 w-full">
           <h1 className="font-display text-4xl sm:text-5xl text-white text-outline drop-shadow-chunky leading-tight uppercase">
-            WHAT DOES <span className={activeSense.color}>{target}</span> {activeSense.verb} LIKE?
+            What does <span className={activeSense.color}>{target}</span> {activeSense.verb} like?
           </h1>
         </SlimeBox>
+        
         <motion.div
-          animate={{ scale: [1, 1.1, 1], rotate: [-5, 5, -5] }}
-          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-          className="text-[100px] mt-2 drop-shadow-chunky"
+          animate={{ 
+            scale: [1, 1.1, 1], 
+            rotate: [-5, 5, -5],
+            y: [0, -10, 0]
+          }}
+          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+          className="mt-4"
         >
-          {activeSense.icon}
+          <GameIcon type={activeSense.icon} size={150} />
         </motion.div>
       </div>
 
@@ -206,13 +209,16 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
           </motion.span>
         </motion.div>
 
-        <button
-          onClick={handleSubmit}
+        <SlimeBox 
+          color="green" 
+          onClick={handleSubmit} 
           disabled={isSubmitting || clue.trim().length === 0}
-          className="w-full bg-toxic-green text-white text-outline font-display text-4xl py-4 rounded-xl shadow-chunky border-4 border-bruise-purple disabled:opacity-50 transition-transform active:scale-95"
+          className="!min-h-[100px]"
         >
-          {isSubmitting ? "LOCKING..." : "Lock Clue"}
-        </button>
+          <span className="font-display text-4xl text-white text-outline uppercase">
+            {isSubmitting ? "Locking..." : "Lock Clue"}
+          </span>
+        </SlimeBox>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ import { motion, AnimatePresence, Variants } from "framer-motion";
 import { GrossOutContainer } from "@/src/components/GrossOutContainer";
 import { SlimeBox } from "@/src/components/SlimeBox";
 import { MeatSackLoader } from "@/src/components/MeatSackLoader";
+import { GameIcon } from "@/src/components/GameIcon";
 import Image from "next/image";
 import { useAudio } from "@/src/components/AudioProvider";
 
@@ -251,31 +252,39 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                 className="!min-h-[80px] !p-4"
               >
                 <div className="flex justify-between items-center w-full text-white">
-                  <div className="flex flex-col text-left">
-                    <span className="font-display text-2xl text-outline truncate max-w-[150px] leading-none">
-                      {player.player_name} {player.id === room.host_id && "👑"}
-                    </span>
-                    {player.id === currentPlayerId && (
-                      <span className="text-[10px] text-outline uppercase font-black tracking-tighter mt-1">(You)</span>
+                  <div className="flex items-center gap-3">
+                    {player.id === room.host_id && (
+                       <GameIcon type="crown" size={40} className="drop-shadow-sm" />
                     )}
+                    <div className="flex flex-col text-left">
+                      <span className="font-display text-2xl text-white text-outline truncate max-w-[150px] leading-none">
+                        {player.player_name}
+                      </span>
+                      {player.id === currentPlayerId && (
+                        <span className="text-[10px] text-white text-outline uppercase font-black tracking-tighter mt-1">(You)</span>
+                      )}
+                    </div>
                   </div>
                   <div className="text-right text-white relative">
                     {/* Score Delta Animation */}
-                    {player.last_score_delta !== null && player.last_score_delta !== 0 && room.current_round > 0 && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 20, scale: 0.5, rotate: -15 }}
-                        animate={{ opacity: 1, y: -10, scale: 1, rotate: 0 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 10, delay: 0.5 + (idx * 0.1) }}
-                        className={`absolute -left-10 -top-2 font-display text-4xl text-outline drop-shadow-chunky ${
-                          player.last_score_delta > 0 ? "text-toxic-green" : "text-fleshy-pink"
-                        }`}
-                      >
-                        {player.last_score_delta > 0 ? "+" : ""}{player.last_score_delta}
-                      </motion.div>
-                    )}
+                    <AnimatePresence>
+                      {player.last_score_delta !== null && player.last_score_delta !== 0 && room.current_round > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 20, scale: 0.5, rotate: -15 }}
+                          animate={{ opacity: 1, y: -10, scale: 1, rotate: 0 }}
+                          exit={{ opacity: 0, scale: 0 }}
+                          transition={{ type: "spring", stiffness: 400, damping: 10, delay: 0.5 + (idx * 0.1) }}
+                          className={`absolute -left-10 -top-2 font-display text-4xl text-outline drop-shadow-chunky ${
+                            player.last_score_delta > 0 ? "text-toxic-green" : "text-fleshy-pink"
+                          }`}
+                        >
+                          {player.last_score_delta > 0 ? "+" : ""}{player.last_score_delta}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
                     <span className="font-display text-3xl block leading-none text-outline">{player.score}</span>
-                    <span className="font-sans text-[10px] font-black uppercase opacity-90 text-outline block mt-1">PTS</span>
+                    <span className="font-sans text-[10px] font-black uppercase opacity-90 text-white text-outline block mt-1">PTS</span>
                   </div>
                 </div>
               </SlimeBox>
@@ -283,66 +292,17 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
           ))}
         </motion.div>
 
-        {/* Host Settings Overlay */}
-        <AnimatePresence>
-          {showSettings && isHost && (
-            <motion.div 
-              initial={{ opacity: 0, y: 100 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              exit={{ opacity: 0, y: 100 }} 
-              className="absolute inset-x-4 bottom-24 bg-white border-8 border-bruise-purple p-6 rounded-3xl z-50 shadow-[8px_8px_0px_0px_rgba(255,0,127,1)] space-y-4"
-            >
-              <h3 className="font-display text-3xl text-bruise-purple text-center uppercase tracking-widest">Game Config</h3>
-              
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => handleUpdateSettings('rounds', 5)} 
-                  className={`flex-1 py-2 font-display text-2xl rounded-xl border-4 transition-colors ${room.round_settings.mode === 'rounds' ? 'bg-fleshy-pink text-white border-bruise-purple shadow-chunky text-outline' : 'bg-white border-bruise-purple text-bruise-purple'}`}
-                >
-                  ROUNDS
-                </button>
-                <button 
-                  onClick={() => handleUpdateSettings('score', 10)} 
-                  className={`flex-1 py-2 font-display text-2xl rounded-xl border-4 transition-colors ${room.round_settings.mode === 'score' ? 'bg-fleshy-pink text-white border-bruise-purple shadow-chunky text-outline' : 'bg-white border-bruise-purple text-bruise-purple'}`}
-                >
-                  SCORE
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between bg-white p-3 rounded-xl border-4 border-bruise-purple shadow-chunky">
-                <button 
-                  onClick={() => handleUpdateSettings(room.round_settings.mode, Math.max(1, room.round_settings.target - 1))} 
-                  className="text-5xl font-display text-bruise-purple px-4 active:scale-75 hover:text-fleshy-pink transition-colors"
-                >-</button>
-                <span className="font-display text-4xl text-bruise-purple">{room.round_settings.target}</span>
-                <button 
-                  onClick={() => handleUpdateSettings(room.round_settings.mode, room.round_settings.target + 1)} 
-                  className="text-5xl font-display text-bruise-purple px-4 active:scale-75 hover:text-toxic-green transition-colors"
-                >+</button>
-              </div>
-
-              <button 
-                onClick={handleNukeRoom} 
-                className="w-full bg-bruise-purple text-warning-yellow font-display text-3xl py-3 rounded-xl border-4 border-bruise-purple shadow-chunky transition-transform active:scale-95 text-outline tracking-wider"
-              >
-                NUKE LOBBY
-              </button>
-              
-              <button onClick={() => setShowSettings(false)} className="w-full text-bruise-purple/60 font-bold uppercase text-sm tracking-widest">Close Settings</button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Action Footer */}
         <div className="mt-auto pt-2">
           {isGameOver ? (
             <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="space-y-2">
-              <div className="text-center animate-bounce">
+              <div className="text-center flex items-center justify-center gap-3">
+                <GameIcon type="imposter" size={50} className="animate-bounce" />
                 <p className="font-display text-3xl text-fleshy-pink text-outline drop-shadow-chunky uppercase">Winner: {sortedPlayers[0]?.player_name}</p>
               </div>
               {isHost && (
                 <SlimeBox color="yellow" onClick={handlePlayAgain} className="!min-h-[90px] !p-4">
-                   <span className="font-display text-4xl text-white text-outline leading-none">PLAY AGAIN</span>
+                   <span className="font-display text-4xl text-white text-outline leading-none uppercase">Play Again</span>
                 </SlimeBox>
               )}
             </motion.div>
@@ -353,14 +313,14 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                disabled={!canStart || isStarting}
                className="!min-h-[90px] !p-4"
              >
-                <span className="font-display text-3xl text-white text-outline tracking-wider leading-none">
+                <span className="font-display text-3xl text-white text-outline tracking-wider leading-none uppercase">
                   {isStarting ? "DEALING..." : room.current_round === 0 ? "START GAME" : "NEXT ROUND"}
                 </span>
              </SlimeBox>
           ) : (
             <MeatSackLoader>
               <SlimeBox color="pink" className="!min-h-[90px] !p-4">
-                 <span className="font-display text-2xl text-white text-outline leading-none tracking-wider">WAITING FOR HOST...</span>
+                 <span className="font-display text-2xl text-white text-outline leading-none tracking-wider uppercase">Waiting for Host...</span>
               </SlimeBox>
             </MeatSackLoader>
           )}

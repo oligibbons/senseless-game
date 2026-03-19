@@ -8,6 +8,8 @@ import { Player } from "@/src/types/database";
 import { motion, Variants } from "framer-motion";
 import { GrossOutContainer } from "@/src/components/GrossOutContainer";
 import { SlimeBox } from "@/src/components/SlimeBox";
+import { GameIcon, IconType } from "@/src/components/GameIcon";
+import { MeatSackLoader } from "@/src/components/MeatSackLoader";
 import { useAudio } from "@/src/components/AudioProvider";
 
 // Strict typing for the data we are pulling from Postgres
@@ -17,7 +19,8 @@ interface Award {
   title: string;
   winnerName: string;
   description: string;
-  color: "pink" | "blue" | "green" | "purple" | "orange";
+  color: "pink" | "blue" | "green" | "purple" | "orange" | "yellow";
+  icon: IconType;
 }
 
 export default function GameOverPage({ params }: { params: Promise<{ code: string }> }) {
@@ -60,7 +63,7 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
       const sortedByScore = [...players].sort((a, b) => b.score - a.score);
       setWinner(sortedByScore[0]);
 
-      // 2. Calculate Funny Awards Client-Side (Zero-Cost Compute)
+      // 2. Calculate Funny Awards Client-Side
       let calculatedAwards: Award[] = [];
       
       // -- Big Brain (Most Correct Guesses)
@@ -70,7 +73,8 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
           title: "Big Brain",
           winnerName: mostCorrect.player_name,
           description: `Nailed ${mostCorrect.stats?.correct_guesses} correct guesses.`,
-          color: "blue"
+          color: "blue",
+          icon: "sight"
         });
       }
 
@@ -81,7 +85,8 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
           title: "Sneaky Meat-Sack",
           winnerName: mostFooled.player_name,
           description: `Fooled ${mostFooled.stats?.fooled_others} people with their lies.`,
-          color: "green"
+          color: "green",
+          icon: "imposter"
         });
       }
 
@@ -92,7 +97,8 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
           title: "Blabbermouth",
           winnerName: blabbermouth.player_name,
           description: `Wrote a massive ${blabbermouth.stats?.longest_clue} character clue.`,
-          color: "purple"
+          color: "purple",
+          icon: "sound"
         });
       }
 
@@ -103,29 +109,32 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
           title: "Man of Few Words",
           winnerName: shortest.player_name,
           description: `Only needed ${shortest.stats?.shortest_clue} characters to explain it.`,
-          color: "orange"
+          color: "orange",
+          icon: "touch"
         });
       }
 
-      // -- Paranoid Android (Most Wrong Guesses)
+      // -- Trigger Happy (Most Wrong Guesses)
       const mostParanoid = [...players].sort((a, b) => (b.stats?.wrong_guesses || 0) - (a.stats?.wrong_guesses || 0))[0];
       if (mostParanoid && (mostParanoid.stats?.wrong_guesses || 0) > 0) {
         calculatedAwards.push({
           title: "Trigger Happy",
           winnerName: mostParanoid.player_name,
           description: `Voted for innocent people ${mostParanoid.stats?.wrong_guesses} times.`,
-          color: "pink"
+          color: "pink",
+          icon: "splat"
         });
       }
 
-      // -- Unjustly Accused (Most innocent votes received)
+      // -- Highly Suspicious (Most innocent votes received)
       const mostSus = [...players].sort((a, b) => (b.stats?.innocent_votes_received || 0) - (a.stats?.innocent_votes_received || 0))[0];
       if (mostSus && (mostSus.stats?.innocent_votes_received || 0) > 0) {
         calculatedAwards.push({
           title: "Highly Suspicious",
           winnerName: mostSus.player_name,
           description: `Accused ${mostSus.stats?.innocent_votes_received} times while totally innocent.`,
-          color: "yellow"
+          color: "yellow",
+          icon: "smell"
         });
       }
 
@@ -135,8 +144,9 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
         calculatedAwards.push({
           title: "Master Thief",
           winnerName: masterThief.player_name,
-          description: `Successfully stole points ${masterThief.stats?.successful_steals} times after getting caught.`,
-          color: "orange"
+          description: `Successfully stole points ${masterThief.stats?.successful_steals} times!`,
+          color: "orange",
+          icon: "alarm"
         });
       }
 
@@ -147,11 +157,12 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
           title: "Terrible Liar",
           winnerName: terribleLiar.player_name,
           description: `Got caught red-handed ${terribleLiar.stats?.times_caught} times.`,
-          color: "purple"
+          color: "purple",
+          icon: "taste"
         });
       }
 
-      // 3. Shuffle the awards to keep the UI fresh and unpredictable
+      // 3. Shuffle the awards to keep the UI fresh
       calculatedAwards = calculatedAwards.sort(() => Math.random() - 0.5);
 
       setAwards(calculatedAwards);
@@ -159,7 +170,6 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
 
     fetchGameData();
 
-    // Listen for the host clicking "Play Again"
     const channel = supabase
       .channel(`game_over_${code}`)
       .on(
@@ -192,15 +202,16 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
 
   if (!winner) {
     return (
-      <div className="flex items-center justify-center h-full font-display text-4xl text-bruise-purple animate-pulse text-outline text-white">
-        CALCULATING DAMAGE...
-      </div>
+      <MeatSackLoader className="flex items-center justify-center h-full">
+        <div className="font-display text-4xl text-bruise-purple text-outline text-white uppercase">
+          CALCULATING DAMAGE...
+        </div>
+      </MeatSackLoader>
     );
   }
 
   const isHost = playerId === hostId;
 
-  // Staggered pop-in animations for that punchy UI feel
   const containerVariants: Variants = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.15 } }
@@ -219,7 +230,7 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
           <motion.h1 
             initial={{ scale: 0.5, rotate: -2 }}
             animate={{ scale: 1, rotate: 0 }}
-            className="font-display text-6xl text-toxic-green drop-shadow-chunky leading-none text-outline text-white"
+            className="font-display text-6xl text-toxic-green drop-shadow-chunky leading-none text-outline text-white uppercase"
           >
             GAME OVER
           </motion.h1>
@@ -228,9 +239,12 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
         {/* Winner Banner */}
         <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2 }} className="mb-4 shrink-0">
           <SlimeBox color="yellow" className="!min-h-[140px] !p-6">
-            <p className="font-sans text-white font-black uppercase tracking-widest text-[10px] text-outline mb-1">Grand Champion</p>
-            <h2 className="font-display text-5xl text-white text-outline leading-none mb-2">{winner.player_name}</h2>
-            <p className="font-display text-3xl text-fleshy-pink text-outline">{winner.score} PTS</p>
+            <div className="flex flex-col items-center gap-2">
+              <GameIcon type="crown" size={60} />
+              <p className="font-sans text-white font-black uppercase tracking-widest text-[10px] text-outline mb-1">Grand Champion</p>
+              <h2 className="font-display text-5xl text-white text-outline leading-none">{winner.player_name}</h2>
+              <p className="font-display text-3xl text-fleshy-pink text-outline">{winner.score} PTS</p>
+            </div>
           </SlimeBox>
         </motion.div>
 
@@ -247,17 +261,22 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
 
           {awards.map((award, idx) => (
             <motion.div variants={itemVariants} key={idx}>
-              <SlimeBox color={award.color} className="!min-h-[100px] !p-4 flex flex-col justify-center relative overflow-hidden">
-                <div className="relative z-10 text-left">
-                  <h3 className="font-display text-3xl text-white text-outline leading-none uppercase">{award.title}</h3>
-                  <div className="flex items-center gap-2 mt-1">
-                    <p className="font-sans text-bruise-purple text-xs font-black uppercase tracking-tight bg-white inline-block px-2 py-1 rounded-sm border-2 border-bruise-purple shadow-[2px_2px_0px_0px_#12001A]">
-                      {award.winnerName}
-                    </p>
+              <MeatSackLoader>
+                <SlimeBox color={award.color} className="!min-h-[100px] !p-4 flex flex-col justify-center relative overflow-hidden">
+                  <div className="flex items-center justify-between w-full relative z-10">
+                    <div className="text-left max-w-[70%]">
+                      <h3 className="font-display text-3xl text-white text-outline leading-none uppercase">{award.title}</h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="font-sans text-bruise-purple text-xs font-black uppercase tracking-tight bg-white inline-block px-2 py-1 rounded-sm border-2 border-bruise-purple shadow-[2px_2px_0px_0px_#12001A]">
+                          {award.winnerName}
+                        </p>
+                      </div>
+                      <p className="font-sans text-white text-[11px] font-bold text-outline mt-2 leading-tight">{award.description}</p>
+                    </div>
+                    <GameIcon type={award.icon} size={60} />
                   </div>
-                  <p className="font-sans text-white text-sm font-bold text-outline mt-2 leading-tight">{award.description}</p>
-                </div>
-              </SlimeBox>
+                </SlimeBox>
+              </MeatSackLoader>
             </motion.div>
           ))}
         </motion.div>
@@ -271,19 +290,21 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
                disabled={isResetting}
                className="!min-h-[90px] !p-2"
              >
-                <span className="font-display text-4xl text-white text-outline tracking-wider leading-none">
+                <span className="font-display text-4xl text-white text-outline tracking-wider leading-none uppercase">
                   {isResetting ? "RESETTING..." : "PLAY AGAIN"}
                 </span>
              </SlimeBox>
           ) : (
-            <SlimeBox color="pink" className="!min-h-[90px] !p-2 animate-pulse">
-               <span className="font-display text-2xl text-white text-outline leading-none tracking-wider">WAITING FOR HOST...</span>
-            </SlimeBox>
+            <MeatSackLoader>
+              <SlimeBox color="pink" className="!min-h-[90px] !p-2">
+                 <span className="font-display text-2xl text-white text-outline leading-none tracking-wider uppercase">WAITING FOR HOST...</span>
+              </SlimeBox>
+            </MeatSackLoader>
           )}
 
           <button 
             onClick={handleReturnToMenu} 
-            className="w-full bg-white text-bruise-purple font-display text-2xl py-3 rounded-xl border-4 border-bruise-purple shadow-[4px_4px_0px_0px_#12001A] transition-transform active:scale-95 uppercase tracking-widest"
+            className="w-full bg-white text-bruise-purple font-display text-2xl py-3 rounded-xl border-4 border-bruise-purple shadow-chunky transition-transform active:scale-95 uppercase tracking-widest"
           >
             QUIT TO MENU
           </button>

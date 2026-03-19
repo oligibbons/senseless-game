@@ -9,9 +9,18 @@ import levenshtein from "fast-levenshtein";
 import { motion, Variants } from "framer-motion";
 import { GrossOutContainer, ScreenShake } from "@/src/components/GrossOutContainer";
 import { SlimeBox } from "@/src/components/SlimeBox";
+import { GameIcon, IconType } from "@/src/components/GameIcon";
+import { MeatSackLoader } from "@/src/components/MeatSackLoader";
 import { useAudio } from "@/src/components/AudioProvider";
 
-// Updated type to include the clue and sense for the "Autopsy" review
+const senseToIcon: Record<string, IconType> = {
+  Sight: "sight",
+  Sound: "sound",
+  Smell: "smell",
+  Touch: "touch",
+  Taste: "taste",
+};
+
 type ResolutionPlayer = Pick<Player, "id" | "player_name" | "is_imposter" | "voted_for" | "room_code" | "current_clue" | "assigned_sense">;
 
 export default function ResolutionPage({ params }: { params: Promise<{ code: string }> }) {
@@ -60,7 +69,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
         if (promptData) setPrompt(promptData as Prompt);
       }
 
-      // Added current_clue and assigned_sense to the select query
       const { data: playersData } = await supabase
         .from("players")
         .select("id, player_name, is_imposter, voted_for, room_code, current_clue, assigned_sense")
@@ -164,7 +172,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
     await finalizeRoundAction(code, imposter.id, false, false);
   };
 
-  // Helper to calculate score delta for the Autopsy UI
   const getRoundScore = (p: ResolutionPlayer) => {
     let roundScore = 0;
     if (p.is_imposter) {
@@ -179,7 +186,13 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
   };
 
   if (!imposter || isCaught === null) {
-    return <div className="flex items-center justify-center h-full font-display text-4xl text-bruise-purple animate-pulse text-outline text-white">TALLYING VOTES...</div>;
+    return (
+      <MeatSackLoader className="flex items-center justify-center h-full">
+        <div className="font-display text-4xl text-bruise-purple text-outline text-white uppercase">
+          Tallying Votes...
+        </div>
+      </MeatSackLoader>
+    );
   }
 
   const isMeImposter = playerId === imposter.id;
@@ -213,17 +226,20 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
       <GrossOutContainer delay={0.2}>
         <div className="flex flex-col h-full p-4 text-center overflow-y-auto pb-8">
           
-          <div className="mt-4 space-y-2 border-b-8 border-bruise-purple pb-6 shrink-0">
+          <div className="mt-4 space-y-2 border-b-8 border-bruise-purple pb-6 shrink-0 relative">
             <p className="font-sans text-bruise-purple/70 font-black uppercase tracking-widest text-xs">The Imposter Was</p>
-            <SlimeBox color={isCaught ? "pink" : "yellow"} className="min-h-[140px] z-10">
-              <motion.h1 
-                variants={revealVariants}
-                initial="hidden"
-                animate="visible"
-                className={`font-display text-6xl drop-shadow-chunky leading-none text-white text-outline`}
-              >
-                {imposter.player_name}
-              </motion.h1>
+            <SlimeBox color={isCaught ? "pink" : "yellow"} className="min-h-[160px] z-10">
+              <div className="flex flex-col items-center gap-2">
+                <GameIcon type="imposter" size={80} />
+                <motion.h1 
+                  variants={revealVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="font-display text-5xl drop-shadow-chunky leading-none text-white text-outline"
+                >
+                  {imposter.player_name}
+                </motion.h1>
+              </div>
             </SlimeBox>
 
             {isCaught ? (
@@ -247,7 +263,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
             )}
           </div>
 
-          {/* Steal Attempt Phase */}
           {isCaught && stealResult === "pending" && (
             <motion.div 
               initial={{ opacity: 0 }}
@@ -281,23 +296,22 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
                     disabled={isFinalizing || stealGuess.length < 2}
                     className="!min-h-[100px] mt-2"
                   >
-                    <span className="font-display text-4xl text-white text-outline">
-                      {isFinalizing ? "CHECKING..." : "ATTEMPT STEAL"}
+                    <span className="font-display text-4xl text-white text-outline uppercase">
+                      {isFinalizing ? "Checking..." : "Attempt Steal"}
                     </span>
                   </SlimeBox>
                 </>
               ) : (
-                <div className="flex flex-col items-center gap-4 animate-pulse mt-8">
-                  <span className="text-7xl drop-shadow-chunky">🚨</span>
-                  <p className="font-display text-4xl text-white text-outline drop-shadow-chunky">
-                    {imposter.player_name} IS ATTEMPTING A STEAL...
+                <div className="flex flex-col items-center gap-4 mt-8">
+                  <GameIcon type="alarm" size={120} className="animate-bounce" />
+                  <p className="font-display text-4xl text-white text-outline drop-shadow-chunky uppercase">
+                    {imposter.player_name} is stealing...
                   </p>
                 </div>
               )}
             </motion.div>
           )}
 
-          {/* Resolution Result & Autopsy */}
           {(stealResult !== "pending" || !isCaught) && (
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
@@ -308,64 +322,59 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
               <SlimeBox color={stealResult === "success" ? "orange" : "purple"} className="min-h-[140px] shrink-0">
                 {isCaught ? (
                   <div className="flex flex-col items-center justify-center space-y-2">
-                    <p className="font-display text-4xl text-white text-outline leading-none">
-                      {stealResult === "success" ? "THE STEAL WAS SUCCESSFUL!" : "THE STEAL FAILED!"}
+                    <p className="font-display text-4xl text-white text-outline leading-none uppercase">
+                      {stealResult === "success" ? "Steal Successful!" : "Steal Failed!"}
                     </p>
                     <p className="font-sans font-black text-[10px] text-white text-outline uppercase tracking-widest">
-                      The True Target was: <span className="text-toxic-green text-sm block mt-1">{prompt?.true_target}</span>
+                      True Target: <span className="text-toxic-green text-sm block mt-1">{prompt?.true_target}</span>
                     </p>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center space-y-2">
-                    <p className="font-display text-4xl text-white text-outline leading-tight">
-                      THE IMPOSTER SURVIVES TO LIE ANOTHER DAY.
+                    <p className="font-display text-4xl text-white text-outline leading-tight uppercase">
+                      The Imposter Survives!
                     </p>
                     <p className="font-sans font-black text-[10px] text-white text-outline uppercase tracking-widest mt-2">
-                      The True Target was: <span className="text-toxic-green text-sm block mt-1">{prompt?.true_target}</span>
+                      True Target: <span className="text-toxic-green text-sm block mt-1">{prompt?.true_target}</span>
                     </p>
                   </div>
                 )}
               </SlimeBox>
 
-              {/* POST-MORTEM / AUTOPSY SECTION */}
               <div className="mt-4 text-left w-full">
                 <h3 className="font-display text-4xl text-fleshy-pink text-outline text-white mb-4 text-center drop-shadow-chunky">THE AUTOPSY</h3>
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-4">
                   {players.map(p => {
                     const voters = players.filter(voter => voter.voted_for === p.id);
-                    
-                    // Client-Side Delta Logic
                     const delta = getRoundScore(p);
-                    const deltaText = delta > 0 ? `+${delta}` : delta === 0 ? `0` : `${delta}`;
-                    const deltaColor = delta > 0 ? "text-toxic-green" : delta < 0 ? "text-fleshy-pink" : "text-bruise-purple/50 text-outline-none";
+                    const deltaText = delta > 0 ? `+${delta}` : `${delta}`;
+                    const deltaColor = delta > 0 ? "text-toxic-green" : delta < 0 ? "text-fleshy-pink" : "text-white/50";
 
                     return (
-                      <div key={p.id} className={`p-4 rounded-xl border-4 border-bruise-purple shadow-chunky bg-white relative ${p.is_imposter ? 'border-warning-yellow ring-4 ring-warning-yellow' : ''}`}>
-                        {p.is_imposter && (
-                          <span className="absolute -top-4 -right-2 text-3xl drop-shadow-chunky rotate-12">😈</span>
-                        )}
+                      <div key={p.id} className={`p-4 rounded-xl border-4 border-bruise-purple shadow-chunky bg-white relative ${p.is_imposter ? 'ring-4 ring-warning-yellow' : ''}`}>
                         <div className="flex justify-between items-start mb-2 border-b-2 border-bruise-purple/10 pb-2">
                           <div className="flex flex-col">
-                            <span className="font-display text-2xl text-bruise-purple leading-none">
-                              {p.player_name} {p.is_imposter ? "(IMPOSTER)" : ""}
-                            </span>
+                            <div className="flex items-center gap-2">
+                               <span className="font-display text-2xl text-bruise-purple leading-none">
+                                {p.player_name}
+                              </span>
+                              {p.is_imposter && <GameIcon type="imposter" size={25} />}
+                            </div>
                             <span className={`font-display text-xl mt-1 drop-shadow-chunky text-outline ${deltaColor}`}>
                               {deltaText} PTS
                             </span>
                           </div>
-                          <span className="font-sans text-[10px] font-black uppercase bg-toxic-green text-bruise-purple px-2 py-1 rounded-sm border-2 border-bruise-purple shadow-[2px_2px_0px_0px_#12001A]">
-                            {p.assigned_sense}
-                          </span>
+                          <GameIcon type={senseToIcon[p.assigned_sense || "Sight"]} size={40} />
                         </div>
                         <p className="font-sans text-sm font-bold text-bruise-purple italic">
                           "{p.current_clue}"
                         </p>
                         
                         {voters.length > 0 && (
-                          <div className="mt-3 bg-bruise-purple/5 p-2 rounded-lg border-2 border-bruise-purple/20">
-                            <p className="font-sans text-[10px] text-fleshy-pink font-black uppercase flex items-center gap-1">
-                              <span>🩸 Voted by:</span> 
-                              <span className="text-bruise-purple">{voters.map(v => v.player_name).join(", ")}</span>
+                          <div className="mt-3 flex flex-wrap gap-2 items-center">
+                            <GameIcon type="splat" size={20} />
+                            <p className="font-sans text-[10px] text-fleshy-pink font-black uppercase tracking-tighter">
+                              Voted by: <span className="text-bruise-purple ml-1">{voters.map(v => v.player_name).join(", ")}</span>
                             </p>
                           </div>
                         )}
@@ -383,8 +392,8 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
                      disabled={isFinalizing}
                      className="!min-h-[100px]"
                    >
-                     <span className="font-display text-4xl text-white text-outline">
-                       {isFinalizing ? "CONTINUE..." : "CONTINUE"}
+                     <span className="font-display text-4xl text-white text-outline uppercase">
+                       {isFinalizing ? "Resetting..." : "Continue"}
                      </span>
                    </SlimeBox>
                  </div>
