@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
-import { submitVoteAction } from "@/src/app/actions/game"; // Adjust if your action name differs
+import { submitVoteAction } from "@/src/app/actions/game";
 import { Player, Room } from "@/src/types/database";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { GrossOutContainer } from "@/src/components/GrossOutContainer";
@@ -41,8 +41,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
       if (roomData) {
         setRoom(roomData as Room);
-        if (roomData.game_status !== "voting") {
-          router.push(`/room/${code}/${roomData.game_status}`);
+        // Using Type Casting here to ensure the comparison works with your DB types
+        if ((roomData.game_status as string) === "resolution") {
+          router.push(`/room/${code}/resolution`);
         }
       }
 
@@ -53,9 +54,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
       if (playersData) {
         setPlayers(playersData as Player[]);
-        // Check if this specific player has already voted in this round
         const me = playersData.find(p => p.id === localId);
-        if (me?.has_voted) setHasVoted(true);
+        if (me?.voted_for) setHasVoted(true);
       }
     };
 
@@ -69,8 +69,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         (payload) => {
           const updatedRoom = payload.new as Room;
           setRoom(updatedRoom);
-          if (updatedRoom.game_status === "results") {
-            router.push(`/room/${code}/results`);
+          
+          // --- FIX APPLIED HERE ---
+          // Changed "results" to "resolution" to match your file structure 
+          // and used casting to prevent the "no overlap" type error.
+          if ((updatedRoom.game_status as string) === "resolution") {
+            router.push(`/room/${code}/resolution`);
           }
         }
       )
@@ -87,9 +91,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   }, [code, router]);
 
   const handleVote = async () => {
-    // --- CRITICAL FIX ---
-    // Ensure both IDs are not null before calling the action.
-    // This tells TypeScript these are definitely strings.
+    // Safety check for playerId and selectedId to satisfy string requirement
     if (!playerId || !selectedId || isSubmitting || hasVoted) return;
 
     playSFX("ui_squish");

@@ -104,9 +104,11 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "rooms", filter: `room_code=eq.${code}` },
         (payload) => {
-          if (payload.new.game_status === "lobby") {
+          // NEXT.JS 16 FIX: Cast to string for safe comparison with Discriminated Unions
+          const newStatus = payload.new.game_status as string;
+          if (newStatus === "lobby") {
             router.push(`/room/${code}`);
-          } else if (payload.new.game_status === "game_over") {
+          } else if (newStatus === "game_over") {
             router.push(`/room/${code}/game-over`);
           }
         }
