@@ -10,14 +10,15 @@ const displayFont = Creepster({
   weight: "400",
   subsets: ["latin"],
   variable: "--font-display",
+  display: "swap",
 });
 
 // The bouncy, comic-book secondary font
 const irishGrover = Irish_Grover({
   weight: "400",
   subsets: ["latin"],
-  // FIX: Explicitly changed the variable name so Next.js doesn't cache the old one
-  variable: "--font-irish", 
+  variable: "--font-irish",
+  display: "swap",
 });
 
 // PWA and SEO Metadata
@@ -46,10 +47,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${displayFont.variable} ${irishGrover.variable} font-sans bg-white text-bruise-purple antialiased min-h-screen flex justify-center`}
-      >
+    // FIX: Variables moved to <html> to ensure global :root scoping
+    <html lang="en" className={`${displayFont.variable} ${irishGrover.variable}`}>
+      <body className="font-sans bg-white text-bruise-purple antialiased min-h-screen flex justify-center">
         <main className="w-full max-w-[430px] min-h-[100dvh] bg-white relative overflow-x-hidden shadow-2xl flex flex-col">
           <ConnectionToast />
           <GrossBackground />
