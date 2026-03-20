@@ -4,7 +4,8 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
 import { finalizeRoundAction } from "@/src/app/actions/resolution";
-import { Player, Prompt } from "@/src/types/database";
+import { triggerStealVotePhaseAction, castStealVoteAction } from "@/src/app/actions/steal";
+import { Player, Prompt, Room } from "@/src/types/database";
 import levenshtein from "fast-levenshtein";
 import { motion, Variants, AnimatePresence } from "framer-motion";
 import { GrossOutContainer, ScreenShake } from "@/src/components/GrossOutContainer";
@@ -22,7 +23,8 @@ const senseToIcon: Record<string, IconType> = {
   Taste: "taste",
 };
 
-type ResolutionPlayer = Pick<Player, "id" | "player_name" | "is_imposter" | "voted_for" | "room_code" | "current_clue" | "assigned_sense">;
+// Extended type to include our new database columns
+type ResolutionPlayer = Pick<Player, "id" | "player_name" | "is_imposter" | "voted_for" | "room_code" | "current_clue" | "assigned_sense"> & { steal_vote?: boolean | null };
 
 export default function ResolutionPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
@@ -34,13 +36,15 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
   const [imposter, setImposter] = useState<ResolutionPlayer | null>(null);
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [hostId, setHostId] = useState<string | null>(null);
+  const [roomStatus, setRoomStatus] = useState<string>("resolution");
+  const [stolenGuess, setStolenGuess] = useState<string>("");
   
   const [isCaught, setIsCaught] = useState<boolean | null>(null);
-  const [stealGuess, setStealGuess] = useState("");
-  const [stealResult, setStealResult] = useState<"pending" | "success" | "failed">("pending");
+  const [stealGuessInput, setStealGuessInput] = useState("");
+  const [stealResult, setStealResult] = useState<"pending" | "voting" | "success" | "failed">("pending");
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [hasCastJuryVote, setHasCastJuryVote] = useState(false);
 
-  // New states for the Blind Voting Reveal
   const [revealPhase, setRevealPhase] = useState<"loading" | "tallying" | "drumroll" | "revealed">("loading");
   const [validVotes, setValidVotes] = useState<{voterName: string, targetId: string}[]>([]);
   const [shownVotes, setShownVotes] = useState<{voterName: string, targetId: string}[]>([]);
@@ -48,6 +52,9 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
   const [hasPlayedReveal, setHasPlayedReveal] = useState(false);
   const [hasPlayedStealAlarm, setHasPlayedStealAlarm] = useState(false);
   const [hasPlayedStealResult, setHasPlayedStealResult] = useState(false);
+
+  const isMeImposter = playerId === imposter?.id;
+  const isHost = playerId === hostId;
 
   useEffect(() => {
     const localId = localStorage.getItem("senseless_player_id");
@@ -58,9 +65,13 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
     setPlayerId(localId);
 
     const loadResolutionData = async () => {
-      const { data: room } = await supabase.from("rooms").select("current_prompt_id, host_id").eq("room_code", code).single();
+      const { data: room } = await supabase.from("rooms").select("current_prompt_id, host_id, game_status, steal_guess").eq("room_code", code).single();
       if (!room) return;
+      
       setHostId(room.host_id);
+      setRoomStatus(room.game_status);
+      if (room.steal_guess) setStolenGuess(room.steal_guess);
+      if (room.game_status === "steal_voting") setStealResult("voting");
 
       if (room.current_prompt_id) {
         const { data: promptData } = await supabase.from("prompts").select("*").eq("id", room.current_prompt_id).single();
@@ -69,7 +80,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
 
       const { data: playersData } = await supabase
         .from("players")
-        .select("id, player_name, is_imposter, voted_for, room_code, current_clue, assigned_sense")
+        .select("id, player_name, is_imposter, voted_for, room_code, current_clue, assigned_sense, steal_vote")
         .eq("room_code", code);
 
       if (!playersData) return;
@@ -93,7 +104,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
         setIsCaught(caught);
       }
 
-      // Extract and shuffle the votes for the blind reveal sequence
       const votes = typedPlayers
         .filter(p => p.voted_for)
         .map(p => ({ voterName: p.player_name, targetId: p.voted_for as string }));
@@ -111,11 +121,21 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
         { event: "UPDATE", schema: "public", table: "rooms", filter: `room_code=eq.${code}` },
         (payload) => {
           const newStatus = payload.new.game_status as string;
-          if (newStatus === "lobby") {
-            router.push(`/room/${code}`);
-          } else if (newStatus === "game_over") {
-            router.push(`/room/${code}/game-over`);
+          setRoomStatus(newStatus);
+          
+          if (newStatus === "lobby") router.push(`/room/${code}`);
+          else if (newStatus === "game_over") router.push(`/room/${code}/game-over`);
+          else if (newStatus === "steal_voting") {
+             setStealResult("voting");
+             if (payload.new.steal_guess) setStolenGuess(payload.new.steal_guess);
           }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "players", filter: `room_code=eq.${code}` },
+        (payload) => {
+           setPlayers(prev => prev.map(p => p.id === payload.new.id ? { ...p, ...payload.new } : p));
         }
       )
       .subscribe();
@@ -125,19 +145,36 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
     };
   }, [code, router]);
 
-  // --- THE TENSION BUILDER (Tallying Sequence) ---
+  // --- AUTOMATIC HOST TALLYING FOR STEAL VOTES ---
+  useEffect(() => {
+    if (isHost && roomStatus === "steal_voting" && imposter) {
+      const nonImposters = players.filter(p => !p.is_imposter);
+      const allVoted = nonImposters.every(p => p.steal_vote !== null);
+      
+      if (allVoted && nonImposters.length > 0) {
+        const yesVotes = nonImposters.filter(p => p.steal_vote === true).length;
+        const noVotes = nonImposters.filter(p => p.steal_vote === false).length;
+        
+        // Tie goes to the Imposter!
+        const success = yesVotes >= noVotes;
+        setStealResult(success ? "success" : "failed");
+        finalizeRoundAction(code, imposter.id, true, success);
+      }
+    }
+  }, [players, roomStatus, isHost, code, imposter]);
+
+
+  // --- TALLYING SEQUENCE ---
   useEffect(() => {
     if (revealPhase !== "tallying" || validVotes.length === 0) return;
 
     if (shownVotes.length < validVotes.length) {
-      // Drop a vote every 1.2 seconds
       const timer = setTimeout(() => {
         playSFX("ui_splat");
         setShownVotes(prev => [...prev, validVotes[prev.length]]);
       }, 1200);
       return () => clearTimeout(timer);
     } else if (shownVotes.length === validVotes.length) {
-      // All votes cast. Pause, then trigger the drumroll.
       const timer = setTimeout(() => {
         setRevealPhase("drumroll");
         playSFX("res_drumroll");
@@ -146,17 +183,15 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
     }
   }, [shownVotes.length, validVotes.length, revealPhase, playSFX]);
 
-  // Transition from drumroll to final reveal
   useEffect(() => {
     if (revealPhase === "drumroll") {
       const timer = setTimeout(() => {
         setRevealPhase("revealed");
-      }, 2500); // Wait for the drumroll sound to peak
+      }, 2500);
       return () => clearTimeout(timer);
     }
   }, [revealPhase]);
 
-  // Play the caught/escaped sound immediately upon reveal
   useEffect(() => {
     if (revealPhase === "revealed" && isCaught !== null && !hasPlayedReveal) {
       if (isCaught) playSFX("res_caught");
@@ -165,7 +200,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
     }
   }, [revealPhase, isCaught, hasPlayedReveal, playSFX]);
 
-  // --- STEAL MECHANIC SOUNDS ---
   useEffect(() => {
     if (revealPhase === "revealed" && isCaught && stealResult === "pending" && !hasPlayedStealAlarm) {
       const t = setTimeout(() => {
@@ -177,53 +211,53 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
   }, [revealPhase, isCaught, stealResult, hasPlayedStealAlarm, playSFX]);
 
   useEffect(() => {
-    if (stealResult !== "pending" && !hasPlayedStealResult) {
+    if ((stealResult === "success" || stealResult === "failed") && !hasPlayedStealResult) {
       if (stealResult === "success") playSFX("steal_success");
       if (stealResult === "failed") playSFX("steal_fail");
       setHasPlayedStealResult(true);
     }
   }, [stealResult, hasPlayedStealResult, playSFX]);
 
+
+  // --- USER ACTIONS ---
   const handleStealAttempt = async () => {
     if (!imposter || !prompt || isFinalizing) return;
-    
     playSFX("ui_splat");
     setIsFinalizing(true);
 
-    let success = false;
-    const guess = stealGuess.trim().toLowerCase();
+    const guess = stealGuessInput.trim().toLowerCase();
     const validAnswers = [prompt.true_target.toLowerCase(), ...prompt.true_synonyms.map(s => s.toLowerCase())];
 
+    let autoSuccess = false;
     for (const answer of validAnswers) {
-      const distance = levenshtein.get(guess, answer);
-      if (distance <= 2) {
-        success = true;
+      if (levenshtein.get(guess, answer) <= 2) {
+        autoSuccess = true;
         break;
       }
     }
 
-    setStealResult(success ? "success" : "failed");
-    
-    try {
-      await finalizeRoundAction(code, imposter.id, true, success);
-    } catch (error) {
-      console.error("Failed to finalize steal:", error);
-      setIsFinalizing(false);
+    if (autoSuccess) {
+      setStealResult("success");
+      await finalizeRoundAction(code, imposter.id, true, true);
+    } else {
+      // Failed the auto-check! Throw it to the jury.
+      await triggerStealVotePhaseAction(code, guess);
+      setIsFinalizing(false); // Unlock UI to show waiting state
     }
+  };
+
+  const handleJuryVote = async (isYes: boolean) => {
+    if (!playerId || hasCastJuryVote) return;
+    playSFX("ui_squish");
+    setHasCastJuryVote(true);
+    await castStealVoteAction(playerId, isYes);
   };
 
   const handleHostContinue = async () => {
     if (!imposter || isFinalizing) return;
-    
     playSFX("ui_splat");
     setIsFinalizing(true);
-    
-    try {
-      await finalizeRoundAction(code, imposter.id, false, false);
-    } catch (error) {
-      console.error("Failed to continue:", error);
-      setIsFinalizing(false);
-    }
+    await finalizeRoundAction(code, imposter.id, false, false);
   };
 
   const getRoundScore = (p: ResolutionPlayer) => {
@@ -249,37 +283,15 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
     );
   }
 
-  const isMeImposter = playerId === imposter.id;
-  const isHost = playerId === hostId;
+  const revealVariants: Variants = { hidden: { scale: 0.8, opacity: 0 }, visible: { scale: 1, opacity: 1 } };
+  const stampVariants: Variants = { hidden: { scale: 3, opacity: 0 }, visible: { scale: 1, opacity: 1, transition: { type: "spring", stiffness: 300, damping: 10, delay: 0.5 } } };
+  const escapeVariants: Variants = { hidden: { y: -50, opacity: 0 }, visible: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 200, damping: 15, delay: 0.5 } } };
 
-  const revealVariants: Variants = {
-    hidden: { scale: 0.8, opacity: 0 },
-    visible: { scale: 1, opacity: 1 }
-  };
-
-  const stampVariants: Variants = {
-    hidden: { scale: 3, opacity: 0 },
-    visible: { 
-      scale: 1, 
-      opacity: 1, 
-      transition: { type: "spring", stiffness: 300, damping: 10, delay: 0.5 } 
-    }
-  };
-
-  const escapeVariants: Variants = {
-    hidden: { y: -50, opacity: 0 },
-    visible: { 
-      y: 0, 
-      opacity: 1, 
-      transition: { type: "spring", stiffness: 200, damping: 15, delay: 0.5 } 
-    }
-  };
-
-  // --- RENDER THE BLIND TALLYING SCREEN ---
   if (revealPhase === "tallying" || revealPhase === "drumroll") {
     return (
       <GrossOutContainer>
-        <div className="flex flex-col flex-grow min-h-full p-4 text-center justify-center">
+        {/* TABLET LAYOUT FIX: Added max-w-md, mx-auto, and justify-center */}
+        <div className="flex flex-col flex-grow min-h-full p-4 text-center justify-center w-full max-w-md mx-auto">
           <motion.h1 
             animate={revealPhase === "drumroll" ? { y: [-5, 5, -5, 5, 0], x: [-5, 5, -5, 5, 0] } : {}}
             transition={{ duration: 0.1, repeat: revealPhase === "drumroll" ? Infinity : 0 }}
@@ -288,16 +300,11 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
             <BumpyText text={revealPhase === "drumroll" ? "THE TRUTH IS..." : "TALLYING VOTES..."} />
           </motion.h1>
           
-          <div className="flex flex-col gap-3 w-full max-w-[350px] mx-auto">
+          <div className="flex flex-col gap-3 w-full">
             {players.map(p => {
               const votesReceived = shownVotes.filter(v => v.targetId === p.id);
-              // Gently pulse the box if they are actively receiving votes
               return (
-                <motion.div 
-                  key={p.id}
-                  animate={votesReceived.length > 0 ? { scale: [1, 1.05, 1] } : {}}
-                  transition={{ duration: 0.3 }}
-                >
+                <motion.div key={p.id} animate={votesReceived.length > 0 ? { scale: [1, 1.05, 1] } : {}} transition={{ duration: 0.3 }}>
                   <SlimeBox color="purple" className="!min-h-[80px] !p-4 relative overflow-hidden">
                     <div className="flex justify-between items-center w-full z-10 relative">
                       <span className="font-display text-3xl text-white text-outline leading-none text-left truncate pr-2">
@@ -306,12 +313,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
                       <div className="flex gap-1 shrink-0">
                         <AnimatePresence>
                           {votesReceived.map((v, i) => (
-                            <motion.div
-                              key={i}
-                              initial={{ scale: 0, rotate: -45, opacity: 0 }}
-                              animate={{ scale: 1, rotate: Math.random() * 20 - 10, opacity: 1 }}
-                              transition={{ type: "spring", stiffness: 500, damping: 15 }}
-                            >
+                            <motion.div key={i} initial={{ scale: 0, rotate: -45, opacity: 0 }} animate={{ scale: 1, rotate: Math.random() * 20 - 10, opacity: 1 }} transition={{ type: "spring", stiffness: 500, damping: 15 }}>
                               <GameIcon type="splat" size={35} className="drop-shadow-chunky" />
                             </motion.div>
                           ))}
@@ -328,82 +330,56 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
     );
   }
 
-  // --- RENDER THE FINAL REVEAL (AUTOPSY) ---
   return (
     <ScreenShake trigger={isCaught && revealPhase === "revealed"}>
       <GrossOutContainer delay={0.1}>
-        <div className="flex flex-col flex-grow min-h-full p-4 text-center overflow-y-auto pb-8">
+         {/* TABLET LAYOUT FIX: Added max-w-md, mx-auto */}
+        <div className="flex flex-col flex-grow min-h-full p-4 text-center overflow-y-auto pb-8 w-full max-w-md mx-auto">
           
+          {/* TOP REVEAL SECTION */}
           <div className="mt-4 space-y-2 border-b-8 border-bruise-purple pb-6 shrink-0 relative">
             <p className="font-sans text-bruise-purple/70 font-black uppercase tracking-widest text-xs">The Imposter Was</p>
             <SlimeBox color={isCaught ? "pink" : "yellow"} className="min-h-[160px] z-10">
               <div className="flex flex-col items-center gap-2">
                 <GameIcon type="imposter" size={80} />
-                <motion.h1 
-                  variants={revealVariants}
-                  initial="hidden"
-                  animate="visible"
-                  className="font-display text-5xl drop-shadow-chunky leading-none text-white text-outline"
-                >
+                <motion.h1 variants={revealVariants} initial="hidden" animate="visible" className="font-display text-5xl drop-shadow-chunky leading-none text-white text-outline">
                   <BumpyText text={imposter.player_name} />
                 </motion.h1>
               </div>
             </SlimeBox>
 
             {isCaught ? (
-              <motion.div 
-                variants={stampVariants}
-                initial="hidden"
-                animate="visible"
-                className="bg-toxic-green text-white text-outline font-display text-5xl py-2 px-6 rounded-xl shadow-chunky inline-block transform rotate-2 border-4 border-bruise-purple -mt-8 relative z-20"
-              >
+              <motion.div variants={stampVariants} initial="hidden" animate="visible" className="bg-toxic-green text-white text-outline font-display text-5xl py-2 px-6 rounded-xl shadow-chunky inline-block transform rotate-2 border-4 border-bruise-purple -mt-8 relative z-20">
                 <BumpyText text="CAUGHT!" />
               </motion.div>
             ) : (
-              <motion.div 
-                variants={escapeVariants}
-                initial="hidden"
-                animate="visible"
-                className="bg-fleshy-pink text-white text-outline font-display text-5xl py-2 px-6 rounded-xl shadow-chunky inline-block transform -rotate-2 border-4 border-bruise-purple -mt-8 relative z-20"
-              >
+              <motion.div variants={escapeVariants} initial="hidden" animate="visible" className="bg-fleshy-pink text-white text-outline font-display text-5xl py-2 px-6 rounded-xl shadow-chunky inline-block transform -rotate-2 border-4 border-bruise-purple -mt-8 relative z-20">
                 <BumpyText text="ESCAPED!" />
               </motion.div>
             )}
           </div>
 
+          {/* STEAL MECHANIC (PENDING) */}
           {isCaught && stealResult === "pending" && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 1 }}
-              className="flex flex-col justify-center gap-4 mt-6 shrink-0"
-            >
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }} className="flex flex-col justify-center gap-4 mt-6 shrink-0">
               {isMeImposter ? (
                 <>
                   <p className="font-sans text-bruise-purple font-black text-sm uppercase tracking-widest">
                     You were caught. Guess the target to steal the points!
                   </p>
-                  
                   <SlimeBox color="blue" className="min-h-[100px]">
                     <span className="text-white font-black uppercase text-[10px] tracking-widest block mb-1 text-outline">Category Hint</span>
                     <p className="font-display text-4xl text-white leading-none text-outline">{prompt?.category}</p>
                   </SlimeBox>
-
                   <input
                     type="text"
                     placeholder="EXACT TARGET..."
-                    value={stealGuess}
-                    onChange={(e) => setStealGuess(e.target.value)}
+                    value={stealGuessInput}
+                    onChange={(e) => setStealGuessInput(e.target.value)}
                     disabled={isFinalizing}
                     className="w-full bg-white text-bruise-purple font-display text-4xl text-center py-4 rounded-xl border-8 border-bruise-purple focus:outline-none focus:border-fleshy-pink shadow-chunky uppercase disabled:opacity-50 transition-colors"
                   />
-                  
-                  <SlimeBox 
-                    color="orange" 
-                    onClick={handleStealAttempt} 
-                    disabled={isFinalizing || stealGuess.length < 2}
-                    className="!min-h-[100px] mt-2 cursor-pointer"
-                  >
+                  <SlimeBox color="orange" onClick={handleStealAttempt} disabled={isFinalizing || stealGuessInput.length < 2} className="!min-h-[100px] mt-2 cursor-pointer">
                     <span className="font-display text-4xl text-white text-outline uppercase">
                       {isFinalizing ? "Checking..." : "Attempt Steal"}
                     </span>
@@ -412,7 +388,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
               ) : (
                 <div className="flex flex-col items-center gap-4 mt-8">
                   <GameIcon type="alarm" size={120} className="animate-bounce" />
-                  <p className="font-display text-4xl text-white text-outline drop-shadow-chunky uppercase">
+                  <p className="font-display text-4xl text-bruise-purple text-outline text-white drop-shadow-chunky uppercase">
                     {imposter.player_name} is stealing...
                   </p>
                 </div>
@@ -420,13 +396,54 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
             </motion.div>
           )}
 
-          {(stealResult !== "pending" || !isCaught) && (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1 }}
-              className="flex flex-col gap-6 mt-4 w-full"
-            >
+          {/* JURY VOTING PHASE */}
+          {isCaught && stealResult === "voting" && (
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col justify-center gap-4 mt-6 shrink-0">
+              {isMeImposter ? (
+                <div className="flex flex-col items-center gap-4 mt-8">
+                  <SlimeBox color="purple" className="!p-6 animate-pulse w-full">
+                    <h2 className="font-display text-3xl text-white text-outline leading-none mb-2 uppercase">
+                      Levenshtein Failed!
+                    </h2>
+                    <p className="font-sans text-white font-bold text-sm text-outline">
+                      The meat-sacks are voting on whether "{stolenGuess}" was close enough to "{prompt?.true_target}"...
+                    </p>
+                  </SlimeBox>
+                </div>
+              ) : (
+                <>
+                  <p className="font-sans text-bruise-purple font-black text-sm uppercase tracking-widest">
+                    The Imposter Guessed:
+                  </p>
+                  <SlimeBox color="yellow" className="min-h-[100px] border-4 border-fleshy-pink">
+                    <p className="font-display text-5xl text-white leading-none text-outline">"{stolenGuess}"</p>
+                  </SlimeBox>
+                  <p className="font-sans text-bruise-purple font-black text-xs uppercase tracking-widest mt-2">
+                    True Target was: <span className="text-toxic-green text-lg bg-black px-2 py-1 rounded-md">{prompt?.true_target}</span>
+                  </p>
+                  
+                  {!hasCastJuryVote ? (
+                    <div className="flex gap-4 mt-4">
+                      <SlimeBox color="pink" onClick={() => handleJuryVote(false)} className="w-1/2 cursor-pointer hover:scale-105 active:scale-95 transition-transform !p-4">
+                        <span className="font-display text-4xl text-white text-outline uppercase">NO</span>
+                      </SlimeBox>
+                      <SlimeBox color="green" onClick={() => handleJuryVote(true)} className="w-1/2 cursor-pointer hover:scale-105 active:scale-95 transition-transform !p-4">
+                        <span className="font-display text-4xl text-white text-outline uppercase">YES</span>
+                      </SlimeBox>
+                    </div>
+                  ) : (
+                    <p className="font-display text-2xl text-bruise-purple uppercase mt-6 animate-pulse">
+                      Vote Locked. Waiting for others...
+                    </p>
+                  )}
+                </>
+              )}
+            </motion.div>
+          )}
+
+          {/* FINAL AUTOPSY / SCORES */}
+          {(stealResult === "success" || stealResult === "failed" || !isCaught) && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="flex flex-col gap-6 mt-4 w-full">
               <SlimeBox color={stealResult === "success" ? "orange" : "purple"} className="min-h-[140px] shrink-0">
                 {isCaught ? (
                   <div className="flex flex-col items-center justify-center space-y-2">
@@ -496,12 +513,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
 
               {isHost && (
                  <div className="sticky bottom-4 pt-4 mt-4 w-full">
-                   <SlimeBox 
-                     color="yellow" 
-                     onClick={handleHostContinue} 
-                     disabled={isFinalizing}
-                     className="!min-h-[100px] cursor-pointer"
-                   >
+                   <SlimeBox color="yellow" onClick={handleHostContinue} disabled={isFinalizing} className="!min-h-[100px] cursor-pointer hover:scale-[1.02] active:scale-95 transition-transform">
                      <span className="font-display text-4xl text-white text-outline uppercase">
                        {isFinalizing ? "Resetting..." : "Continue"}
                      </span>

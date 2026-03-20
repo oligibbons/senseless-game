@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
-import { submitVoteAction, forceAdvancePhaseAction } from "@/src/app/actions/voting"; // BUGFIX: Corrected import path
+import { submitVoteAction, forceAdvancePhaseAction } from "@/src/app/actions/voting"; 
 import { Player, Room } from "@/src/types/database";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { GrossOutContainer } from "@/src/components/GrossOutContainer";
@@ -44,13 +44,14 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
       if (roomData) {
         setRoom(roomData as Room);
-        setIsHost(roomData.host_id === localId); // Check if current player is the host
+        setIsHost(roomData.host_id === localId);
         
         if ((roomData.game_status as string) === "resolution") {
           router.push(`/room/${code}/resolution`);
         }
       }
 
+      // Fetch all players to show their clues
       const { data: playersData } = await supabase
         .from("players")
         .select("*")
@@ -98,7 +99,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     setIsSubmitting(true);
 
     try {
-      // BUGFIX: Corrected the argument order to match the server action signature
       const result = await submitVoteAction(playerId, code, selectedId);
       if (result.success) {
         setHasVoted(true);
@@ -112,7 +112,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     }
   };
 
-  // Triggered when the Global Timer hits 0
   const handleTimeUp = async () => {
     if (!isHost) return;
     await forceAdvancePhaseAction(code, "resolution");
@@ -143,12 +142,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   return (
     <GrossOutContainer>
       <div className="flex flex-col flex-grow min-h-full p-4 text-center">
-        <div className="mt-6 mb-4">
+        <div className="mt-4 mb-2">
           <motion.h1 
             initial={{ rotate: -2 }}
             animate={{ rotate: 2 }}
             transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-            className="font-display text-5xl text-warning-yellow text-outline text-white uppercase leading-none"
+            className="font-display text-4xl sm:text-5xl text-warning-yellow text-outline text-white uppercase leading-none"
           >
             <BumpyText text="WHO IS SENSELESS?" />
           </motion.h1>
@@ -157,9 +156,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           </p>
         </div>
         
-        {/* Added the Global Timer for active voters */}
         {!hasVoted && (
-          <div className="mb-4">
+          <div className="mb-2">
             <GlobalTimer 
               key={code} 
               duration={60} 
@@ -176,25 +174,41 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               variants={containerVariants}
               initial="hidden"
               animate="show"
-              className="flex-grow flex flex-col gap-3 overflow-y-auto pb-6 px-1"
+              className="flex-grow flex flex-col gap-4 overflow-y-auto pb-6 px-1 mt-2"
             >
               {otherPlayers.map((player) => (
                 <motion.div key={player.id} variants={itemVariants}>
                   <SlimeBox
                     color={selectedId === player.id ? "yellow" : "purple"}
                     onClick={() => setSelectedId(player.id)}
-                    className={`!p-4 transition-all ${selectedId === player.id ? "scale-105 border-white border-4" : "opacity-90"}`}
+                    className={`!p-4 transition-all ${selectedId === player.id ? "scale-105 border-white border-4 shadow-[0_0_20px_rgba(255,215,0,0.6)]" : "opacity-90 grayscale-[20%]"}`}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <div className="text-left">
-                        <h3 className="font-display text-2xl text-white text-outline leading-none uppercase">
+                    <div className="flex flex-col w-full text-left gap-3 relative">
+                      
+                      {/* Top Row: Name and Sense Badge */}
+                      <div className="flex items-center justify-between z-10">
+                        <span className="font-display text-2xl text-white text-outline uppercase tracking-wider">
                           {player.player_name}
-                        </h3>
-                        <p className="font-sans text-[10px] text-white font-bold opacity-80 mt-1 uppercase italic">
-                          "{player.current_clue || "Thinking..."}"
+                        </span>
+                        {player.assigned_sense && (
+                          <span className="font-sans text-[10px] uppercase font-black bg-white text-bruise-purple px-2 py-1 rounded-md border-2 border-bruise-purple shadow-sm">
+                            Sense: {player.assigned_sense}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Middle Row: The actual clue (Massive and bold) */}
+                      <div className="bg-black/20 p-3 rounded-lg border-2 border-white/20 min-h-[60px] flex items-center justify-center text-center z-10">
+                        <p className={`font-sans font-black leading-tight text-white drop-shadow-md ${player.current_clue ? "text-xl sm:text-2xl" : "text-sm opacity-60 italic"}`}>
+                          {player.current_clue ? `"${player.current_clue}"` : "[ Failed to write a clue in time ]"}
                         </p>
                       </div>
-                      <GameIcon type="imposter" size={40} className={selectedId === player.id ? "opacity-100" : "opacity-30"} />
+
+                      {/* Background Icon Watermark */}
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-10 pointer-events-none">
+                         <GameIcon type="imposter" size={80} />
+                      </div>
+
                     </div>
                   </SlimeBox>
                 </motion.div>
@@ -216,7 +230,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 </p>
               </SlimeBox>
 
-              {/* Added the Global Timer for users who have already voted */}
               <div className="w-full max-w-sm">
                 <GlobalTimer 
                   key={code} 
@@ -229,13 +242,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           )}
         </AnimatePresence>
 
-        <div className="mt-auto pt-2">
+        <div className="mt-auto pt-2 pb-4">
           {!hasVoted && (
             <SlimeBox
               color="green"
               onClick={handleVote}
               disabled={!selectedId || isSubmitting}
-              className={`!min-h-[90px] !p-4 transition-all ${!selectedId ? 'grayscale opacity-50' : 'cursor-pointer'}`}
+              className={`!min-h-[80px] !p-4 transition-all ${!selectedId ? 'grayscale opacity-50' : 'cursor-pointer hover:scale-[1.02] active:scale-95'}`}
             >
               <span className="font-display text-4xl text-white text-outline uppercase">
                 {isSubmitting ? "Accusing..." : "VOTE NOW"}

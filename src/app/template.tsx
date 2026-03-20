@@ -1,4 +1,3 @@
-// src/app/template.tsx
 "use client";
 
 import { motion } from "framer-motion";
@@ -15,7 +14,6 @@ export default function Template({ children }: { children: React.ReactNode }) {
         damping: 20,
         mass: 0.8
       }}
-      // FIX: Changed from "h-full w-full" to flexbox properties to allow vertical expansion
       className="flex flex-col flex-grow w-full min-h-full"
     >
       {children}

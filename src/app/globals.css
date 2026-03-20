@@ -21,18 +21,15 @@
 }
 
 @layer utilities {
-  /* This gives our text a thick comic-book outline for perfect contrast */
   .text-outline {
     -webkit-text-stroke: 2px var(--color-bruise-purple);
     paint-order: stroke fill;
   }
 
-  /* Visceral, high-contrast drop shadow for icons and logos */
   .drop-shadow-chunky {
     filter: drop-shadow(4px 4px 0px #12001A);
   }
 
-  /* Radial Vignette to add depth without losing the white center */
   .bg-white-vignette {
     background: radial-gradient(
       circle, 
@@ -45,24 +42,27 @@
 
 /* Base Styles */
 body {
-  background-color: #ffffff; /* Reverted to clean white */
+  /* Set the out-of-bounds background to the dark theme color */
+  background-color: var(--color-bruise-purple); 
   color: var(--color-bruise-purple);
+  
+  /* Prevent horizontal scrolling glitches */
   overflow-x: hidden;
   
-  /* Prevent rubber-banding on iOS for a more "App" feel without breaking scrolling */
+  /* Prevent rubber-banding on iOS for a more "App" feel */
   overscroll-behavior-y: none;
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
+  
+  /* Removed the hardcoded CSS flexbox rules. 
+     Tailwind handles the global centering in layout.tsx now! */
 }
 
-/* Custom Scrollbar to match the gross vibe */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 12px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #ffffff;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {

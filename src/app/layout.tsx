@@ -33,13 +33,13 @@ export const metadata: Metadata = {
   },
 };
 
-// Strict viewport controls to prevent zooming, which ruins PWA game UI
+// Strict viewport controls to prevent zooming
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#FFFFFF", 
+  themeColor: "#12001A", // Matches the dark desktop background
 };
 
 export default function RootLayout({
@@ -49,9 +49,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${displayFont.variable} ${irishGrover.variable}`}>
-      <body className="font-sans bg-white text-bruise-purple antialiased min-h-screen flex justify-center">
-        <main className="w-full max-w-[430px] min-h-[100dvh] bg-white relative overflow-x-hidden shadow-2xl flex flex-col">
-          {/* Invisible utilities */}
+      {/* BODY: Acts as the "Tabletop". 
+        It flex-centers the virtual phone in the dead middle of the screen.
+      */}
+      <body className="font-sans bg-bruise-purple text-bruise-purple antialiased min-h-[100dvh] flex flex-col items-center justify-center overflow-x-hidden">
+        
+        {/* MAIN: The "Virtual Phone Screen".
+          - Mobile (default): w-full, 100vh, no borders. Acts like a normal app.
+          - Tablet/Desktop (sm): Max width 430px, 90vh tall, rounded corners, thick border.
+        */}
+        <main className="w-full sm:max-w-[430px] min-h-[100dvh] sm:min-h-0 sm:h-[90dvh] sm:max-h-[950px] sm:rounded-[2.5rem] sm:border-[12px] sm:border-dark-void bg-white relative overflow-x-hidden overflow-y-auto shadow-[0_0_50px_rgba(0,0,0,0.4)] flex flex-col mx-auto">
+          
           <WakeLock />
           <ConnectionToast />
           
@@ -59,6 +67,7 @@ export default function RootLayout({
           <AudioProvider>
             {children}
           </AudioProvider>
+          
         </main>
       </body>
     </html>
