@@ -3,7 +3,7 @@
 import { useEffect, useState, use, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
-import { submitClueAction, toggleRerollVoteAction } from "@/src/app/actions/writing";
+import { submitClueAction, toggleRerollVoteAction, forceAdvancePhaseAction } from "@/src/app/actions/writing";
 import { SlimeBox } from "@/src/components/SlimeBox";
 import { useAudio } from "@/src/components/AudioProvider";
 import { motion, useAnimation } from "framer-motion";
@@ -12,6 +12,7 @@ import { GameIcon, IconType } from "@/src/components/GameIcon";
 import { MeatSackLoader } from "@/src/components/MeatSackLoader";
 import { DynamicDowntime } from "@/src/components/DynamicDowntime";
 import { BumpyText } from "@/src/components/BumpyText";
+import GlobalTimer from "@/src/components/GlobalTimer";
 
 const SENSE_UI: Record<string, { icon: IconType; verb: string; color: string }> = {
   Sight: { icon: "sight", verb: "LOOK", color: "text-fleshy-pink" },
@@ -21,7 +22,6 @@ const SENSE_UI: Record<string, { icon: IconType; verb: string; color: string }> 
   Taste: { icon: "taste", verb: "TASTE", color: "text-warning-yellow" },
 };
 
-// Updated type to include wants_reroll tracking
 type WritingPlayer = Pick<Player, "id" | "player_name" | "is_imposter" | "assigned_sense" | "current_clue" | "wants_reroll">;
 
 export default function WritingPage({ params }: { params: Promise<{ code: string }> }) {
@@ -39,21 +39,29 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   const [isTogglingReroll, setIsTogglingReroll] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [hasRevealed, setHasRevealed] = useState(false);
+  
+  // Timer specific state
+  const [isHost, setIsHost] = useState(false);
+  const [promptId, setPromptId] = useState<string>("");
 
   const inputShakeControls = useAnimation();
   const currentPromptRef = useRef<string | null>(null);
 
-  // We extract loadPhaseData so it can be re-run if a reroll occurs
   const loadPhaseData = async (localId: string) => {
+    // 1. Fetch room data including the host_id
     const { data: room } = await supabase
       .from("rooms")
-      .select("current_prompt_id")
+      .select("current_prompt_id, host_id")
       .eq("room_code", code)
       .single();
 
     if (!room || !room.current_prompt_id) return;
+    
     currentPromptRef.current = room.current_prompt_id;
+    setPromptId(room.current_prompt_id);
+    setIsHost(room.host_id === localId);
 
+    // 2. Fetch players
     const { data: playersData } = await supabase
       .from("players")
       .select("id, player_name, is_imposter, assigned_sense, current_clue, wants_reroll")
@@ -73,6 +81,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
       setIsSubmitted(true);
     }
 
+    // 3. Fetch current target
     const { data: prompt } = await supabase
       .from("prompts")
       .select("true_target, imposter_target")
@@ -116,7 +125,6 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
         (payload) => {
           setPlayers((prev) => prev.map((p) => (p.id === payload.new.id ? { ...p, ...payload.new } : p)));
           
-          // Failsafe: If the server wipes our clue (due to reroll), unlock the UI
           if (payload.new.id === localId && payload.new.current_clue === null) {
               setIsSubmitted(false);
               setClue("");
@@ -166,11 +174,16 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
     playSFX("ui_squish");
     setIsTogglingReroll(true);
     
-    // Optimistic UI update
     setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, wants_reroll: wantsReroll } : p));
     
     await toggleRerollVoteAction(playerId, code, wantsReroll);
     setIsTogglingReroll(false);
+  };
+
+  // Triggered when the Global Timer hits 0
+  const handleTimeUp = async () => {
+    if (!isHost) return;
+    await forceAdvancePhaseAction(code, "voting");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -199,7 +212,6 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   
   const waitingOnNames = players.filter(p => !p.current_clue).map(p => p.player_name);
   
-  // Reroll stats
   const localPlayer = players.find(p => p.id === playerId);
   const wantsReroll = localPlayer?.wants_reroll || false;
   const rerollVotes = players.filter(p => p.wants_reroll).length;
@@ -219,21 +231,38 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
     </button>
   );
 
+  // --------------------------------------------------------------------------
+  // WAITING VIEW (For players who have already locked in their clue)
+  // --------------------------------------------------------------------------
   if (isSubmitted) {
     return (
       <div className="flex flex-col flex-grow min-h-full items-center justify-center p-6 text-center space-y-8">
         <h1 className="font-display text-6xl text-fleshy-pink text-outline drop-shadow-chunky uppercase">
           <BumpyText text="Clue Locked" />
         </h1>
+        
         <MeatSackLoader className="flex flex-col items-center gap-6">
           <GameIcon type={activeSense.icon} size={150} />
           <DynamicDowntime waitingOn={waitingOnNames} />
         </MeatSackLoader>
+
+        <div className="w-full max-w-md">
+          <GlobalTimer 
+            key={promptId} 
+            duration={90} 
+            isHost={isHost} 
+            onTimeUp={handleTimeUp} 
+          />
+        </div>
+
         <RerollButton />
       </div>
     );
   }
 
+  // --------------------------------------------------------------------------
+  // ACTIVE VIEW (For players currently writing their clue)
+  // --------------------------------------------------------------------------
   return (
     <div className="flex flex-col flex-grow min-h-full p-4 relative z-10">
       {errorMsg && (
@@ -249,6 +278,13 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
           </h1>
         </SlimeBox>
         
+        <GlobalTimer 
+          key={promptId} 
+          duration={90} 
+          isHost={isHost} 
+          onTimeUp={handleTimeUp} 
+        />
+
         <RerollButton />
 
         <motion.div

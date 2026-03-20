@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
-import { submitVoteAction } from "@/src/app/actions/game";
+import { submitVoteAction, forceAdvancePhaseAction } from "@/src/app/actions/voting"; // BUGFIX: Corrected import path
 import { Player, Room } from "@/src/types/database";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { GrossOutContainer } from "@/src/components/GrossOutContainer";
@@ -12,6 +12,7 @@ import { GameIcon } from "@/src/components/GameIcon";
 import { MeatSackLoader } from "@/src/components/MeatSackLoader";
 import { useAudio } from "@/src/components/AudioProvider";
 import { BumpyText } from "@/src/components/BumpyText";
+import GlobalTimer from "@/src/components/GlobalTimer";
 
 export default function VotingPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
@@ -24,6 +25,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
+  const [isHost, setIsHost] = useState(false);
 
   useEffect(() => {
     const localId = localStorage.getItem("senseless_player_id");
@@ -42,7 +44,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
       if (roomData) {
         setRoom(roomData as Room);
-        // Using Type Casting here to ensure the comparison works with your DB types
+        setIsHost(roomData.host_id === localId); // Check if current player is the host
+        
         if ((roomData.game_status as string) === "resolution") {
           router.push(`/room/${code}/resolution`);
         }
@@ -95,7 +98,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     setIsSubmitting(true);
 
     try {
-      const result = await submitVoteAction(code, playerId, selectedId);
+      // BUGFIX: Corrected the argument order to match the server action signature
+      const result = await submitVoteAction(playerId, code, selectedId);
       if (result.success) {
         setHasVoted(true);
       } else {
@@ -106,6 +110,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       console.error("Voting failed:", err);
       setIsSubmitting(false);
     }
+  };
+
+  // Triggered when the Global Timer hits 0
+  const handleTimeUp = async () => {
+    if (!isHost) return;
+    await forceAdvancePhaseAction(code, "resolution");
   };
 
   if (!room || !playerId || players.length === 0) {
@@ -146,6 +156,18 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             Find the Imposter
           </p>
         </div>
+        
+        {/* Added the Global Timer for active voters */}
+        {!hasVoted && (
+          <div className="mb-4">
+            <GlobalTimer 
+              key={code} 
+              duration={60} 
+              isHost={isHost} 
+              onTimeUp={handleTimeUp} 
+            />
+          </div>
+        )}
 
         <AnimatePresence mode="wait">
           {!hasVoted ? (
@@ -185,7 +207,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               animate={{ opacity: 1, scale: 1 }}
               className="flex-grow flex flex-col items-center justify-center gap-6"
             >
-              <SlimeBox color="blue" className="!p-8 animate-pulse">
+              <SlimeBox color="blue" className="!p-8 animate-pulse w-full max-w-sm">
                 <h2 className="font-display text-4xl text-white text-outline leading-none mb-4 uppercase">
                   Accusation Cast!
                 </h2>
@@ -193,6 +215,16 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   Waiting for the other meat-sacks to point fingers...
                 </p>
               </SlimeBox>
+
+              {/* Added the Global Timer for users who have already voted */}
+              <div className="w-full max-w-sm">
+                <GlobalTimer 
+                  key={code} 
+                  duration={60} 
+                  isHost={isHost} 
+                  onTimeUp={handleTimeUp} 
+                />
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

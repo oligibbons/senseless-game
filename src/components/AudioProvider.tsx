@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 
-// Strict typing for our audio keys so we don't make typos later
 export type SFX =
   | "ui_squish" | "ui_splat" | "ui_error"
   | "lobby_join" | "lobby_start" | "lobby_nuke"
@@ -11,7 +10,6 @@ export type SFX =
   | "res_drumroll" | "res_caught" | "res_escaped"
   | "steal_alarm" | "steal_success" | "steal_fail";
 
-// Map the exact file names and extensions you uploaded
 const SFX_MAP: Record<SFX, string> = {
   ui_squish: "/sfx_ui_squish.wav",
   ui_splat: "/sfx_ui_splat.wav",
@@ -46,6 +44,8 @@ export const useAudio = () => {
 
 export function AudioProvider({ children }: { children: ReactNode }) {
   const bgmRef = useRef<HTMLAudioElement>(null);
+  const sfxRefs = useRef<Record<string, HTMLAudioElement | null>>({});
+  
   const [isMuted, setIsMuted] = useState(false);
   const [hasInteracted, setHasInteracted] = useState(false);
 
@@ -54,7 +54,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     const audio = bgmRef.current;
     if (!audio) return;
 
-    audio.volume = 0.35; // Keeping theme slightly lower so SFX punch through
+    audio.volume = 0.35;
     audio.loop = true;
 
     const handleFirstInteraction = () => {
@@ -86,17 +86,41 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     setIsMuted(!isMuted);
   };
 
-  // Our global SFX player
+  // Zero-latency SFX player using preloaded elements
   const playSFX = (sfx: SFX) => {
-    if (isMuted) return; // Respect the global mute
-    const audio = new Audio(SFX_MAP[sfx]);
-    audio.volume = 0.8;
-    audio.play().catch((e) => console.warn("SFX blocked:", e));
+    if (isMuted) return;
+    
+    const baseAudio = sfxRefs.current[sfx];
+    if (baseAudio) {
+      // Clone the node so the same sound can overlap if triggered rapidly
+      const clone = baseAudio.cloneNode(true) as HTMLAudioElement;
+      clone.volume = 0.8;
+      clone.play().catch((e) => console.warn("SFX blocked:", e));
+      
+      // Clean up the clone after it finishes playing
+      clone.onended = () => clone.remove();
+    } else {
+      // Fallback just in case the ref isn't bound yet
+      const audio = new Audio(SFX_MAP[sfx]);
+      audio.volume = 0.8;
+      audio.play().catch((e) => console.warn("SFX blocked:", e));
+    }
   };
 
   return (
     <AudioContext.Provider value={{ playSFX, isMuted, toggleMute }}>
+      {/* Background Theme */}
       <audio ref={bgmRef} src="/senseless_theme.mp3" preload="auto" />
+      
+      {/* Hidden preloaded SFX elements */}
+      {Object.entries(SFX_MAP).map(([key, src]) => (
+        <audio 
+          key={key} 
+          ref={(el) => { sfxRefs.current[key] = el; }} 
+          src={src} 
+          preload="auto" 
+        />
+      ))}
       
       <button
         onClick={toggleMute}
