@@ -1,7 +1,7 @@
 "use client";
 
-import { ReactNode, useId } from "react";
-import { motion } from "framer-motion";
+import { ReactNode, useId, useRef } from "react";
+import { motion, useInView } from "framer-motion";
 import { useAudio } from "@/src/components/AudioProvider";
 
 export type SlimeColor = "blue" | "green" | "orange" | "pink" | "purple" | "yellow";
@@ -27,6 +27,10 @@ export function SlimeBox({ children, color, className = "", onClick, disabled = 
   const hexColor = colorMap[color] || colorMap.green;
   const filterId = useId().replace(/:/g, "-"); 
   const { playSFX } = useAudio();
+  
+  // Performance Ref: Tracks if this specific box is visible on screen
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isInView = useInView(containerRef, { margin: "100px" });
 
   const isInteractive = !!onClick && !disabled;
 
@@ -43,40 +47,54 @@ export function SlimeBox({ children, color, className = "", onClick, disabled = 
 
   return (
     <div 
-      // The wrapper ALWAYS keeps pb-12 for the drips. className is moved to the inner content!
+      ref={containerRef}
       className={`relative w-full pb-12 ${disabled ? "opacity-50 cursor-not-allowed grayscale-[50%]" : ""}`}
       onClick={onClick || disabled ? handleClick : undefined}
       role={onClick ? "button" : "presentation"}
     >
       
-      {/* 1. SLOW VISCOUS BOIL (SVG Filter) */}
+      {/* 1. SLOW VISCOUS BOIL (Optimized SVG Filter) */}
       <svg className="absolute w-0 h-0" aria-hidden="true">
         <filter id={`wavy-${filterId}`} x="-20%" y="-20%" width="140%" height="140%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.01" numOctaves="3" result="noise">
-            <animate attributeName="baseFrequency" values="0.01;0.018;0.01" dur={`${12 + Math.random() * 5}s`} repeatCount="indefinite" />
+          {/* OPTIMIZATION: Reduced numOctaves from 3 to 1 to drastically cut CPU load */}
+          <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="1" result="noise">
+            {/* OPTIMIZATION: Only run the heavy SVG animation if the box is actually visible */}
+            {isInView && (
+              <animate attributeName="baseFrequency" values="0.015;0.022;0.015" dur={`${12 + Math.random() * 5}s`} repeatCount="indefinite" />
+            )}
           </feTurbulence>
-          <feDisplacementMap in="SourceGraphic" in2="noise" scale="18" xChannelSelector="R" yChannelSelector="G" />
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="15" xChannelSelector="R" yChannelSelector="G" />
         </filter>
       </svg>
 
       {/* 2. VISUAL BACKGROUND (Filtered Layer) */}
       <div 
         className="absolute top-0 left-0 right-0 bottom-12 z-0 pointer-events-none" 
-        style={{ filter: `url(#wavy-${filterId}) drop-shadow(8px 8px 0px rgba(18,0,26,0.9))` }}
+        style={{ 
+          filter: `url(#wavy-${filterId}) drop-shadow(8px 8px 0px rgba(18,0,26,0.9))`,
+          // OPTIMIZATION: Force this heavy filtered layer to composite on the GPU
+          WebkitTransform: "translateZ(0)",
+          transform: "translateZ(0)"
+        }}
       >
         <motion.div
-          animate={{
+          // OPTIMIZATION: Pause animation and hold a static lumpy shape when off-screen
+          animate={isInView ? {
             borderRadius: [
               "12px 32px 16px 40px",
               "32px 16px 40px 12px",
               "16px 40px 12px 32px",
               "12px 32px 16px 40px",
             ]
+          } : {
+            borderRadius: "12px 32px 16px 40px"
           }}
           transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
           className={`w-full h-full border-[6px] border-bruise-purple`}
           style={{
             backgroundColor: hexColor,
+            // OPTIMIZATION: Tell the browser ahead of time what is going to change
+            willChange: "border-radius, transform",
             backgroundImage: `
               radial-gradient(ellipse at 15% 15%, rgba(255,255,255,0.6) 0%, transparent 25%),
               radial-gradient(circle at 85% 85%, rgba(0,0,0,0.4) 0%, transparent 40%),
@@ -109,16 +127,16 @@ export function SlimeBox({ children, color, className = "", onClick, disabled = 
           <div className="absolute top-2 left-[10%] right-[20%] h-4 sm:h-6 bg-gradient-to-r from-white/80 to-transparent rounded-[50%] blur-[1px] transform -rotate-2" />
         </motion.div>
 
-        {/* 3. VISCOUS DRIPS */}
+        {/* 3. VISCOUS DRIPS (Passed the isInView boolean down so they pause too) */}
         <div className="absolute top-full left-0 right-0 z-20 flex justify-around px-10">
-          <LiquidDrip delay={0} color={hexColor} height="h-12" />
-          <LiquidDrip delay={2.2} color={hexColor} height="h-16" />
-          <LiquidDrip delay={1.1} color={hexColor} height="h-10" />
-          <LiquidDrip delay={3.7} color={hexColor} height="h-14" />
+          <LiquidDrip delay={0} color={hexColor} height="h-12" isInView={isInView} />
+          <LiquidDrip delay={2.2} color={hexColor} height="h-16" isInView={isInView} />
+          <LiquidDrip delay={1.1} color={hexColor} height="h-10" isInView={isInView} />
+          <LiquidDrip delay={3.7} color={hexColor} height="h-14" isInView={isInView} />
         </div>
       </div>
 
-      {/* 4. THE CONTENT (Custom class names applied HERE so they don't break the wrapper padding) */}
+      {/* 4. THE CONTENT */}
       <motion.div 
         className={`relative z-20 w-full flex flex-col items-center justify-center p-6 min-h-[140px] text-center ${className} ${isInteractive ? "cursor-pointer" : ""}`}
         whileHover={isInteractive ? { scale: 1.02, rotate: -1 } : {}}
@@ -131,14 +149,15 @@ export function SlimeBox({ children, color, className = "", onClick, disabled = 
   );
 }
 
-function LiquidDrip({ delay, color, height }: { delay: number; color: string; height: string }) {
+// Added isInView prop to pause the stretching drips
+function LiquidDrip({ delay, color, height, isInView }: { delay: number; color: string; height: string; isInView: boolean }) {
   return (
     <div className="relative flex flex-col items-center w-5">
       <motion.div
-        animate={{ 
+        animate={isInView ? { 
           scaleY: [1, 2.8, 1], 
           scaleX: [1, 0.45, 1], 
-        }}
+        } : { scaleY: 1, scaleX: 1 }}
         transition={{ 
           duration: 7, 
           repeat: Infinity, 
@@ -149,15 +168,16 @@ function LiquidDrip({ delay, color, height }: { delay: number; color: string; he
         style={{ 
           backgroundColor: color,
           borderRadius: '40% 60% 60% 40% / 0% 0% 100% 100%',
-          boxShadow: "inset 0px -8px 10px rgba(0,0,0,0.6)" 
+          boxShadow: "inset 0px -8px 10px rgba(0,0,0,0.6)",
+          willChange: "transform"
         }}
       />
       <motion.div
-        animate={{
+        animate={isInView ? {
           y: [0, 45, 70],
           opacity: [0, 1, 0],
           scale: [0, 1.2, 0.5]
-        }}
+        } : { y: 0, opacity: 0, scale: 0 }}
         transition={{
           duration: 7,
           repeat: Infinity,
@@ -165,7 +185,10 @@ function LiquidDrip({ delay, color, height }: { delay: number; color: string; he
           ease: "easeIn"
         }}
         className="absolute top-[80%] w-3 h-3 border-[3px] border-bruise-purple rounded-full z-0"
-        style={{ backgroundColor: color }}
+        style={{ 
+          backgroundColor: color,
+          willChange: "transform, opacity"
+        }}
       />
     </div>
   );
