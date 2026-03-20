@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Creepster, Inter } from "next/font/google";
+import { Creepster, Irish_Grover } from "next/font/google";
 import "./globals.css";
 import { AudioProvider } from "@/src/components/AudioProvider";
 import GrossBackground from "@/src/components/GrossBackground";
+import { ConnectionToast } from "@/src/components/ConnectionToast";
 
 // The new drippy, gross-out font
 const displayFont = Creepster({
@@ -11,10 +12,11 @@ const displayFont = Creepster({
   variable: "--font-display",
 });
 
-// Load the readable secondary font
-const inter = Inter({
+// Load the readable secondary font (Swapped to Irish Grover)
+const irishGrover = Irish_Grover({
+  weight: "400",
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-inter", // Kept this variable name so globals.css doesn't need changing!
 });
 
 // PWA and SEO Metadata
@@ -45,10 +47,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${displayFont.variable} ${inter.variable} font-sans bg-white text-bruise-purple antialiased min-h-screen flex justify-center`}
+        className={`${displayFont.variable} ${irishGrover.variable} font-sans bg-white text-bruise-purple antialiased min-h-screen flex justify-center`}
       >
-        {/* Changed overflow-hidden to overflow-x-hidden to unlock vertical scrolling */}
         <main className="w-full max-w-[430px] min-h-[100dvh] bg-white relative overflow-x-hidden shadow-2xl flex flex-col">
+          {/* New Connection Toast added here */}
+          <ConnectionToast />
           <GrossBackground />
           <AudioProvider>
             {children}

@@ -11,6 +11,7 @@ import { SlimeBox } from "@/src/components/SlimeBox";
 import { GameIcon } from "@/src/components/GameIcon";
 import { MeatSackLoader } from "@/src/components/MeatSackLoader";
 import { useAudio } from "@/src/components/AudioProvider";
+import { BumpyText } from "@/src/components/BumpyText";
 
 export default function VotingPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
@@ -70,9 +71,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           const updatedRoom = payload.new as Room;
           setRoom(updatedRoom);
           
-          // --- FIX APPLIED HERE ---
-          // Changed "results" to "resolution" to match your file structure 
-          // and used casting to prevent the "no overlap" type error.
           if ((updatedRoom.game_status as string) === "resolution") {
             router.push(`/room/${code}/resolution`);
           }
@@ -91,7 +89,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   }, [code, router]);
 
   const handleVote = async () => {
-    // Safety check for playerId and selectedId to satisfy string requirement
     if (!playerId || !selectedId || isSubmitting || hasVoted) return;
 
     playSFX("ui_squish");
@@ -143,7 +140,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
             className="font-display text-5xl text-warning-yellow text-outline text-white uppercase leading-none"
           >
-            WHO IS SENSELESS?
+            <BumpyText text="WHO IS SENSELESS?" />
           </motion.h1>
           <p className="font-sans text-white font-black text-xs uppercase mt-2 tracking-widest bg-bruise-purple inline-block px-3 py-1 rounded-full border-2 border-white">
             Find the Imposter

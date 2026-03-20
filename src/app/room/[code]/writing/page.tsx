@@ -10,6 +10,7 @@ import { motion, useAnimation } from "framer-motion";
 import { Player } from "@/src/types/database";
 import { GameIcon, IconType } from "@/src/components/GameIcon";
 import { MeatSackLoader } from "@/src/components/MeatSackLoader";
+import { DynamicDowntime } from "@/src/components/DynamicDowntime";
 
 const SENSE_UI: Record<string, { icon: IconType; verb: string; color: string }> = {
   Sight: { icon: "sight", verb: "LOOK", color: "text-fleshy-pink" },
@@ -19,7 +20,8 @@ const SENSE_UI: Record<string, { icon: IconType; verb: string; color: string }> 
   Taste: { icon: "taste", verb: "TASTE", color: "text-warning-yellow" },
 };
 
-type WritingPlayer = Pick<Player, "is_imposter" | "assigned_sense" | "current_clue">;
+// Updated type to include player_name for our downtime text
+type WritingPlayer = Pick<Player, "id" | "player_name" | "is_imposter" | "assigned_sense" | "current_clue">;
 
 export default function WritingPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
@@ -27,6 +29,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   const { playSFX } = useAudio();
 
   const [playerId, setPlayerId] = useState<string | null>(null);
+  const [players, setPlayers] = useState<WritingPlayer[]>([]);
   const [target, setTarget] = useState<string>("");
   const [sense, setSense] = useState<string>("");
   const [clue, setClue] = useState("");
@@ -54,18 +57,24 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
 
       if (!room || !room.current_prompt_id) return;
 
-      const { data: playerData } = await supabase
+      // Fetch ALL players to track who is still writing
+      const { data: playersData } = await supabase
         .from("players")
-        .select("is_imposter, assigned_sense, current_clue")
-        .eq("id", localId)
-        .single();
+        .select("id, player_name, is_imposter, assigned_sense, current_clue")
+        .eq("room_code", code);
 
-      if (!playerData) return;
-      const player = playerData as WritingPlayer;
+      if (!playersData) return;
+      
+      const typedPlayers = playersData as WritingPlayer[];
+      setPlayers(typedPlayers);
 
-      setSense(player.assigned_sense || "Sight");
+      // Find the local user's specific data
+      const me = typedPlayers.find(p => p.id === localId);
+      if (!me) return;
 
-      if (player.current_clue) {
+      setSense(me.assigned_sense || "Sight");
+
+      if (me.current_clue) {
         setIsSubmitted(true);
       }
 
@@ -77,7 +86,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
 
       if (!prompt) return;
 
-      setTarget(player.is_imposter ? prompt.imposter_target : prompt.true_target);
+      setTarget(me.is_imposter ? prompt.imposter_target : prompt.true_target);
     };
 
     loadPhaseData();
@@ -91,6 +100,14 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
           if (payload.new.game_status === "voting") {
             router.push(`/room/${code}/voting`);
           }
+        }
+      )
+      .on(
+        // Listen for player updates to dynamically update the downtime text
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "players", filter: `room_code=eq.${code}` },
+        (payload) => {
+          setPlayers((prev) => prev.map((p) => (p.id === payload.new.id ? { ...p, ...payload.new } : p)));
         }
       )
       .subscribe();
@@ -119,6 +136,8 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
 
       if (result.success) {
         setIsSubmitted(true);
+        // Optimistically update local state to avoid waiting for the socket bounce-back
+        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, current_clue: clue } : p));
       } else {
         setErrorMsg(result.error || "Failed to submit clue.");
         setIsSubmitting(false);
@@ -153,6 +172,9 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   const activeSense = SENSE_UI[sense];
   const charsLeft = 50 - clue.length;
   const isDangerZone = charsLeft <= 10;
+  
+  // Calculate exactly who we are waiting on
+  const waitingOnNames = players.filter(p => !p.current_clue).map(p => p.player_name);
 
   if (isSubmitted) {
     return (
@@ -160,7 +182,8 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
         <h1 className="font-display text-6xl text-fleshy-pink text-outline drop-shadow-chunky uppercase">Clue Locked</h1>
         <MeatSackLoader className="flex flex-col items-center gap-6">
           <GameIcon type={activeSense.icon} size={150} />
-          <p className="font-sans text-bruise-purple text-xl font-bold uppercase">Waiting for the others...</p>
+          {/* Using our brand new Dynamic Downtime component */}
+          <DynamicDowntime waitingOn={waitingOnNames} />
         </MeatSackLoader>
       </div>
     );

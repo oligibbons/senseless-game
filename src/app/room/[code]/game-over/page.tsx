@@ -11,8 +11,8 @@ import { SlimeBox } from "@/src/components/SlimeBox";
 import { GameIcon, IconType } from "@/src/components/GameIcon";
 import { MeatSackLoader } from "@/src/components/MeatSackLoader";
 import { useAudio } from "@/src/components/AudioProvider";
+import { BumpyText } from "@/src/components/BumpyText";
 
-// Strict typing for the data we are pulling from Postgres
 type GameOverPlayer = Pick<Player, "id" | "player_name" | "score" | "stats">;
 
 interface Award {
@@ -59,14 +59,11 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
       if (!playersData) return;
       const players = playersData as GameOverPlayer[];
 
-      // 1. Determine Winner (Highest Score)
       const sortedByScore = [...players].sort((a, b) => b.score - a.score);
       setWinner(sortedByScore[0]);
 
-      // 2. Calculate Funny Awards Client-Side
       let calculatedAwards: Award[] = [];
       
-      // -- Big Brain (Most Correct Guesses)
       const mostCorrect = [...players].sort((a, b) => (b.stats?.correct_guesses || 0) - (a.stats?.correct_guesses || 0))[0];
       if (mostCorrect && (mostCorrect.stats?.correct_guesses || 0) > 0) {
         calculatedAwards.push({
@@ -78,7 +75,6 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
         });
       }
 
-      // -- Sneaky Meat-Sack (Fooled the most people)
       const mostFooled = [...players].sort((a, b) => (b.stats?.fooled_others || 0) - (a.stats?.fooled_others || 0))[0];
       if (mostFooled && (mostFooled.stats?.fooled_others || 0) > 0) {
         calculatedAwards.push({
@@ -90,7 +86,6 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
         });
       }
 
-      // -- Blabbermouth (Longest Clue)
       const blabbermouth = [...players].sort((a, b) => (b.stats?.longest_clue || 0) - (a.stats?.longest_clue || 0))[0];
       if (blabbermouth && (blabbermouth.stats?.longest_clue || 0) > 0) {
         calculatedAwards.push({
@@ -102,7 +97,6 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
         });
       }
 
-      // -- Man of Few Words (Shortest Clue)
       const shortest = [...players].sort((a, b) => (a.stats?.shortest_clue || 999) - (b.stats?.shortest_clue || 999))[0];
       if (shortest && (shortest.stats?.shortest_clue || 999) < 999 && (shortest.stats?.shortest_clue || 0) > 0) {
         calculatedAwards.push({
@@ -114,7 +108,6 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
         });
       }
 
-      // -- Trigger Happy (Most Wrong Guesses)
       const mostParanoid = [...players].sort((a, b) => (b.stats?.wrong_guesses || 0) - (a.stats?.wrong_guesses || 0))[0];
       if (mostParanoid && (mostParanoid.stats?.wrong_guesses || 0) > 0) {
         calculatedAwards.push({
@@ -126,7 +119,6 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
         });
       }
 
-      // -- Highly Suspicious (Most innocent votes received)
       const mostSus = [...players].sort((a, b) => (b.stats?.innocent_votes_received || 0) - (a.stats?.innocent_votes_received || 0))[0];
       if (mostSus && (mostSus.stats?.innocent_votes_received || 0) > 0) {
         calculatedAwards.push({
@@ -138,7 +130,6 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
         });
       }
 
-      // -- Master Thief (Successful Steals)
       const masterThief = [...players].sort((a, b) => (b.stats?.successful_steals || 0) - (a.stats?.successful_steals || 0))[0];
       if (masterThief && (masterThief.stats?.successful_steals || 0) > 0) {
         calculatedAwards.push({
@@ -150,7 +141,6 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
         });
       }
 
-      // -- Terrible Liar (Times Caught)
       const terribleLiar = [...players].sort((a, b) => (b.stats?.times_caught || 0) - (a.stats?.times_caught || 0))[0];
       if (terribleLiar && (terribleLiar.stats?.times_caught || 0) > 0) {
         calculatedAwards.push({
@@ -162,7 +152,6 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
         });
       }
 
-      // 3. Shuffle the awards to keep the UI fresh
       calculatedAwards = calculatedAwards.sort(() => Math.random() - 0.5);
 
       setAwards(calculatedAwards);
@@ -189,9 +178,6 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
   }, [code, router]);
 
   const handlePlayAgain = async () => {
-    // --- FIX APPLIED HERE ---
-    // Added 'hostId' to the check. TypeScript now knows 'hostId' 
-    // is a string if the code continues past this line.
     if (playerId !== hostId || isResetting || !hostId) return;
     
     playSFX("lobby_start");
@@ -242,7 +228,7 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
             animate={{ scale: 1, rotate: 0 }}
             className="font-display text-6xl text-toxic-green drop-shadow-chunky leading-none text-outline text-white uppercase"
           >
-            GAME OVER
+            <BumpyText text="GAME OVER" />
           </motion.h1>
         </div>
 
@@ -252,7 +238,9 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
             <div className="flex flex-col items-center gap-2">
               <GameIcon type="crown" size={60} />
               <p className="font-sans text-white font-black uppercase tracking-widest text-[10px] text-outline mb-1">Grand Champion</p>
-              <h2 className="font-display text-5xl text-white text-outline leading-none">{winner.player_name}</h2>
+              <h2 className="font-display text-5xl text-white text-outline leading-none">
+                <BumpyText text={winner.player_name} />
+              </h2>
               <p className="font-display text-3xl text-fleshy-pink text-outline">{winner.score} PTS</p>
             </div>
           </SlimeBox>
