@@ -121,7 +121,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
 
   if (errorMsg) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-6 text-center space-y-6">
+      <div className="flex flex-col items-center justify-center flex-grow min-h-full p-6 text-center space-y-6">
         <h1 className="font-display text-5xl text-fleshy-pink text-outline drop-shadow-chunky text-balance">ROOM CLOSED</h1>
         <p className="font-sans text-bruise-purple font-bold text-xl">{errorMsg}</p>
         <button onClick={() => router.replace("/")} className="bg-bruise-purple text-toxic-green font-display text-3xl px-8 py-3 rounded-xl shadow-chunky transition-transform active:scale-95">Go Home</button>
@@ -131,7 +131,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
 
   if (!room || !currentPlayerId) {
     return (
-      <MeatSackLoader className="flex items-center justify-center h-full">
+      <MeatSackLoader className="flex items-center justify-center flex-grow min-h-full">
         <div className="font-display text-4xl text-fleshy-pink text-outline drop-shadow-chunky">
           CONNECTING...
         </div>
@@ -190,7 +190,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
 
   return (
     <GrossOutContainer>
-      <div className="flex flex-col h-full p-4 relative">
+      <div className="flex flex-col flex-grow min-h-full p-4 relative">
         
         {/* Header Area */}
         <div className="text-center mb-2 mt-4 flex flex-col items-center">

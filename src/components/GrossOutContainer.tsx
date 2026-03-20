@@ -19,7 +19,8 @@ export function GrossOutContainer({
         damping: 25,
         delay: delay,
       }}
-      className="w-full flex flex-col h-full"
+      // FIX: Changed 'h-full' to 'flex-grow min-h-full' to allow content expansion
+      className="w-full flex flex-col flex-grow min-h-full"
     >
       {children}
     </motion.div>
@@ -32,7 +33,8 @@ export function ScreenShake({ children, trigger }: { children: React.ReactNode, 
         <motion.div
             animate={trigger ? { x: [-10, 10, -10, 10, 0], y: [-5, 5, -5, 5, 0] } : {}}
             transition={{ duration: 0.4, type: "spring" }}
-            className="w-full h-full flex flex-col"
+            // FIX: Changed 'h-full' to 'flex-grow min-h-full' here as well
+            className="w-full flex flex-col flex-grow min-h-full"
         >
             {children}
         </motion.div>

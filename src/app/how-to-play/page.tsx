@@ -27,7 +27,7 @@ export default function HowToPlayPage() {
 
   return (
     <GrossOutContainer>
-      <div className="flex flex-col h-full p-4 relative">
+      <div className="flex flex-col flex-grow min-h-full p-4 relative">
         
         {/* Header */}
         <div className="text-center mb-2 mt-6">

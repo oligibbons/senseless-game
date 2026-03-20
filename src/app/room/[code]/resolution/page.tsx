@@ -206,7 +206,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
 
   if (!imposter || isCaught === null) {
     return (
-      <MeatSackLoader className="flex items-center justify-center h-full">
+      <MeatSackLoader className="flex items-center justify-center flex-grow min-h-full">
         <div className="font-display text-4xl text-bruise-purple text-outline text-white uppercase">
           Tallying Votes...
         </div>
@@ -243,7 +243,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
   return (
     <ScreenShake trigger={isCaught}>
       <GrossOutContainer delay={0.2}>
-        <div className="flex flex-col h-full p-4 text-center overflow-y-auto pb-8">
+        <div className="flex flex-col flex-grow min-h-full p-4 text-center overflow-y-auto pb-8">
           
           <div className="mt-4 space-y-2 border-b-8 border-bruise-purple pb-6 shrink-0 relative">
             <p className="font-sans text-bruise-purple/70 font-black uppercase tracking-widest text-xs">The Imposter Was</p>

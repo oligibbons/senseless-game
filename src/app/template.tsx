@@ -15,7 +15,8 @@ export default function Template({ children }: { children: React.ReactNode }) {
         damping: 20,
         mass: 0.8
       }}
-      className="h-full w-full"
+      // FIX: Changed from "h-full w-full" to flexbox properties to allow vertical expansion
+      className="flex flex-col flex-grow w-full min-h-full"
     >
       {children}
     </motion.div>

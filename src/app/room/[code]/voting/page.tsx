@@ -113,7 +113,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   if (!room || !playerId || players.length === 0) {
     return (
-      <MeatSackLoader className="flex items-center justify-center h-full">
+      <MeatSackLoader className="flex items-center justify-center flex-grow min-h-full">
         <div className="font-display text-4xl text-fleshy-pink text-outline uppercase">
           Sniffing out the imposter...
         </div>
@@ -135,7 +135,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   return (
     <GrossOutContainer>
-      <div className="flex flex-col h-full p-4 text-center">
+      <div className="flex flex-col flex-grow min-h-full p-4 text-center">
         <div className="mt-6 mb-4">
           <motion.h1 
             initial={{ rotate: -2 }}

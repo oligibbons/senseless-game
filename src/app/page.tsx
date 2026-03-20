@@ -48,7 +48,7 @@ export default function LandingPage() {
 
   return (
     <GrossOutContainer>
-      <div className="flex flex-col h-full p-4 relative justify-center">
+      <div className="flex flex-col flex-grow min-h-full p-4 relative justify-center">
         
         {/* Animated Logo */}
         <div className="text-center mb-6 flex flex-col items-center">

@@ -108,8 +108,6 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   }, [target, sense, hasRevealed, isSubmitted, playSFX]);
 
   const handleSubmit = async () => {
-    // --- FIX ---
-    // This check ensures 'playerId' is a string before the action call.
     if (!playerId || clue.trim().length === 0 || isSubmitting) return;
     
     playSFX("ui_splat");
@@ -117,7 +115,6 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
     setErrorMsg("");
 
     try {
-      // TypeScript now knows 'playerId' is string, not null.
       const result = await submitClueAction(playerId, code, clue);
 
       if (result.success) {
@@ -145,7 +142,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
 
   if (!target || !sense) {
     return (
-      <MeatSackLoader className="flex items-center justify-center h-full">
+      <MeatSackLoader className="flex flex-col flex-grow min-h-full items-center justify-center">
         <div className="font-display text-4xl text-bruise-purple text-outline text-white uppercase">
           Extracting Data...
         </div>
@@ -159,7 +156,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
 
   if (isSubmitted) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-6 text-center space-y-8">
+      <div className="flex flex-col flex-grow min-h-full items-center justify-center p-6 text-center space-y-8">
         <h1 className="font-display text-6xl text-fleshy-pink text-outline drop-shadow-chunky uppercase">Clue Locked</h1>
         <MeatSackLoader className="flex flex-col items-center gap-6">
           <GameIcon type={activeSense.icon} size={150} />
@@ -170,7 +167,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   }
 
   return (
-    <div className="flex flex-col h-full p-4 relative z-10">
+    <div className="flex flex-col flex-grow min-h-full p-4 relative z-10">
       {errorMsg && (
         <div className="bg-warning-yellow text-bruise-purple font-bold p-3 rounded-xl text-center mb-4 border-4 border-bruise-purple shadow-chunky uppercase">
           {errorMsg}
@@ -197,7 +194,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
         </motion.div>
       </div>
 
-      <div className="mt-auto flex flex-col gap-4">
+      <div className="mt-auto pt-4 flex flex-col gap-4">
         <motion.div animate={inputShakeControls} className="relative">
           <textarea
             value={clue}
@@ -223,7 +220,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
           color="green" 
           onClick={handleSubmit} 
           disabled={isSubmitting || clue.trim().length === 0}
-          className="!min-h-[100px] cursor-pointer"
+          className="!min-h-[100px] cursor-pointer mb-4"
         >
           <span className="font-display text-4xl text-white text-outline uppercase">
             {isSubmitting ? "Locking..." : "Lock Clue"}

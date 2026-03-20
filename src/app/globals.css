@@ -48,10 +48,12 @@ body {
   background-color: #ffffff; /* Reverted to clean white */
   color: var(--color-bruise-purple);
   overflow-x: hidden;
-  /* Prevent rubber-banding on iOS for a more "App" feel */
-  position: fixed;
-  width: 100%;
-  height: 100%;
+  
+  /* Prevent rubber-banding on iOS for a more "App" feel without breaking scrolling */
+  overscroll-behavior-y: none;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Custom Scrollbar to match the gross vibe */

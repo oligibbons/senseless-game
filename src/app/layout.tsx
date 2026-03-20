@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Creepster, Inter } from "next/font/google";
 import "./globals.css";
 import { AudioProvider } from "@/src/components/AudioProvider";
-// FIX: Changed from named import { GrossBackground } to default import
 import GrossBackground from "@/src/components/GrossBackground";
 
 // The new drippy, gross-out font
@@ -48,7 +47,8 @@ export default function RootLayout({
       <body
         className={`${displayFont.variable} ${inter.variable} font-sans bg-white text-bruise-purple antialiased min-h-screen flex justify-center`}
       >
-        <main className="w-full max-w-[430px] min-h-[100dvh] bg-white relative overflow-hidden shadow-2xl flex flex-col">
+        {/* Changed overflow-hidden to overflow-x-hidden to unlock vertical scrolling */}
+        <main className="w-full max-w-[430px] min-h-[100dvh] bg-white relative overflow-x-hidden shadow-2xl flex flex-col">
           <GrossBackground />
           <AudioProvider>
             {children}

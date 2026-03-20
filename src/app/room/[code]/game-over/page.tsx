@@ -212,7 +212,7 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
 
   if (!winner) {
     return (
-      <MeatSackLoader className="flex items-center justify-center h-full">
+      <MeatSackLoader className="flex items-center justify-center flex-grow min-h-full">
         <div className="font-display text-4xl text-bruise-purple text-outline text-white uppercase">
           CALCULATING DAMAGE...
         </div>
@@ -234,7 +234,7 @@ export default function GameOverPage({ params }: { params: Promise<{ code: strin
 
   return (
     <GrossOutContainer>
-      <div className="flex flex-col h-full p-4 relative text-center">
+      <div className="flex flex-col flex-grow min-h-full p-4 relative text-center">
         
         <div className="mt-4 mb-2 shrink-0">
           <motion.h1 
