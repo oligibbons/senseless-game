@@ -25,6 +25,9 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
   const [errorMsg, setErrorMsg] = useState("");
   const [isStarting, setIsStarting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  
+  // New state to hold the slider value while dragging so we don't spam the database
+  const [tempTarget, setTempTarget] = useState<number | null>(null);
 
   const prevPlayerCount = useRef(0);
 
@@ -169,6 +172,24 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
     await playAgainAction(code, currentPlayerId);
   };
 
+  // Triggered rapidly while sliding
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTempTarget(Number(e.target.value));
+    // Provide a subtle physical tick sensation as the slider moves
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(10); 
+    }
+  };
+
+  // Triggered once when the user lets go of the slider
+  const handleSliderCommit = async () => {
+    if (tempTarget !== null && isHost && currentPlayerId) {
+      playSFX("ui_squish");
+      await handleUpdateSettings(room.round_settings.mode, tempTarget);
+      setTempTarget(null); // Clear local state so it relies on the DB again
+    }
+  };
+
   const containerVariants: Variants = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.1 } }
@@ -231,7 +252,10 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
             </h2>
             {isHost && (
               <button 
-                onClick={() => setShowSettings(!showSettings)} 
+                onClick={() => {
+                  playSFX("ui_squish");
+                  setShowSettings(!showSettings);
+                }} 
                 className="text-xs bg-bruise-purple text-white px-3 py-2 rounded-xl shadow-chunky transition-transform active:scale-90 font-bold uppercase"
               >
                 {showSettings ? "CLOSE" : "CONFIG"}
@@ -239,7 +263,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
             )}
           </div>
 
-          {/* New Config Panel */}
+          {/* New Interactive Config Panel */}
           <AnimatePresence>
             {showSettings && isHost && (
               <motion.div
@@ -248,24 +272,63 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                 exit={{ opacity: 0, height: 0, marginBottom: 0 }}
                 className="overflow-hidden"
               >
-                <SlimeBox color="purple" className="!p-4 !min-h-[80px]">
-                  <p className="font-sans text-white font-black uppercase tracking-widest text-[10px] text-outline mb-2 text-left">
-                    Game Settings
-                  </p>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => handleUpdateSettings('rounds', 3)}
-                      className={`flex-1 font-display text-xl py-2 rounded-xl border-4 transition-colors ${room.round_settings.mode === 'rounds' ? 'bg-toxic-green border-white text-bruise-purple' : 'bg-bruise-purple border-bruise-purple text-white/50'}`}
-                    >
-                      3 ROUNDS
-                    </button>
-                    <button 
-                      onClick={() => handleUpdateSettings('score', 10)}
-                      className={`flex-1 font-display text-xl py-2 rounded-xl border-4 transition-colors ${room.round_settings.mode === 'score' ? 'bg-toxic-green border-white text-bruise-purple' : 'bg-bruise-purple border-bruise-purple text-white/50'}`}
-                    >
-                      FIRST TO 10
-                    </button>
+                <SlimeBox color="purple" className="!p-4 !min-h-[140px] flex flex-col gap-4">
+                  
+                  {/* Mode Selector */}
+                  <div>
+                    <p className="font-sans text-white font-black uppercase tracking-widest text-[10px] text-outline mb-2 text-left">
+                      Win Condition
+                    </p>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => { 
+                          playSFX("ui_squish"); 
+                          handleUpdateSettings('rounds', room.round_settings.mode === 'rounds' ? room.round_settings.target : 3); 
+                        }}
+                        className={`flex-1 font-display text-2xl py-2 rounded-xl border-4 transition-colors shadow-chunky ${room.round_settings.mode === 'rounds' ? 'bg-toxic-green border-white text-bruise-purple' : 'bg-bruise-purple border-bruise-purple text-white/50 shadow-none'}`}
+                      >
+                        ROUNDS
+                      </button>
+                      <button 
+                        onClick={() => { 
+                          playSFX("ui_squish"); 
+                          handleUpdateSettings('score', room.round_settings.mode === 'score' ? room.round_settings.target : 10); 
+                        }}
+                        className={`flex-1 font-display text-2xl py-2 rounded-xl border-4 transition-colors shadow-chunky ${room.round_settings.mode === 'score' ? 'bg-toxic-green border-white text-bruise-purple' : 'bg-bruise-purple border-bruise-purple text-white/50 shadow-none'}`}
+                      >
+                        SCORE
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Tactile Slider */}
+                  <div className="bg-bruise-purple/50 p-3 rounded-xl border-2 border-white/10">
+                    <div className="flex justify-between items-end mb-2">
+                      <label className="font-sans text-white font-bold text-xs uppercase tracking-widest text-outline">
+                        {room.round_settings.mode === 'rounds' ? 'Total Rounds' : 'Target Points'}
+                      </label>
+                      <motion.span 
+                        key={tempTarget}
+                        initial={{ scale: 1.2 }}
+                        animate={{ scale: 1 }}
+                        className="font-display text-4xl text-fleshy-pink text-outline leading-none drop-shadow-chunky"
+                      >
+                        {tempTarget !== null ? tempTarget : room.round_settings.target}
+                      </motion.span>
+                    </div>
+                    <input 
+                      type="range"
+                      min="1"
+                      max={room.round_settings.mode === 'rounds' ? "10" : "20"}
+                      step="1"
+                      value={tempTarget !== null ? tempTarget : room.round_settings.target}
+                      onChange={handleSliderChange}
+                      onMouseUp={handleSliderCommit}
+                      onTouchEnd={handleSliderCommit}
+                      className="w-full h-4 bg-bruise-purple rounded-full appearance-none outline-none cursor-pointer accent-[#FF007F] shadow-inner"
+                    />
+                  </div>
+
                 </SlimeBox>
               </motion.div>
             )}
