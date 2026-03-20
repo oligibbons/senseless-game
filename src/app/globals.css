@@ -10,7 +10,8 @@
 
   /* Typography */
   --font-display: var(--font-display), cursive;
-  --font-sans: var(--font-inter), sans-serif;
+  /* Linked the Tailwind font-sans class to your new Irish Grover variable */
+  --font-sans: var(--font-irish), cursive; 
 
   /* Chunky pop-art shadows */
   --shadow-chunky: 4px 4px 0px 0px #12001A;
@@ -66,7 +67,8 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-toxic-green);
+  /* Changed from toxic-green to bruise-purple */
+  background: var(--color-bruise-purple);
   border: 3px solid #ffffff;
   border-radius: 10px;
 }

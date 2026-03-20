@@ -48,101 +48,106 @@ export default function LandingPage() {
 
   return (
     <GrossOutContainer>
-      <div className="flex flex-col flex-grow min-h-full p-4 relative justify-center">
+      {/* Replaced justify-center with py-12 and overflow-y-auto to fix top cutoff */}
+      <div className="flex flex-col flex-grow min-h-full p-4 py-12 relative overflow-y-auto">
         
-        {/* Animated Logo */}
-        <div className="text-center mb-6 flex flex-col items-center">
-          <motion.div
-            animate={{ 
-              rotate: [-2, 2, -2], 
-              scale: [0.97, 1.03, 0.97] 
-            }}
-            transition={{ 
-              duration: 4, 
-              repeat: Infinity, 
-              ease: "easeInOut" 
-            }}
-          >
-            <Image 
-              src="/Senseless Logo.png" 
-              alt="Senseless Game Logo" 
-              width={260} 
-              height={120} 
-              className="drop-shadow-chunky"
-              priority
-            />
-          </motion.div>
-        </div>
-
-        {errorMsg && (
-          <div className="bg-warning-yellow text-bruise-purple font-bold p-3 rounded-xl text-center mb-4 border-4 border-bruise-purple shadow-chunky z-10 relative">
-            {errorMsg}
-          </div>
-        )}
-
-        <div className="space-y-3 z-10 relative">
+        {/* Added m-auto wrapper. This centers content safely without flex clipping */}
+        <div className="m-auto w-full flex flex-col">
           
-          <SlimeBox color="pink" className="!min-h-[110px] !p-4">
-            <p className="text-white font-black uppercase text-[10px] tracking-widest mb-1 text-outline">Meat-Sack Name</p>
-            <input 
-              type="text" 
-              value={name} 
-              onChange={e => setName(e.target.value)}
-              placeholder="ENTER NAME..."
-              disabled={isLoading}
-              className="w-full bg-white text-bruise-purple font-display text-2xl text-center py-2 rounded-xl border-4 border-bruise-purple focus:outline-none focus:border-toxic-green uppercase placeholder:text-bruise-purple/30 disabled:opacity-50 transition-colors"
-              maxLength={15}
-            />
-          </SlimeBox>
-
-          <SlimeBox color="blue" className="!min-h-[110px] !p-4">
-            <p className="text-white font-black uppercase text-[10px] tracking-widest mb-1 text-outline">Room Code (To Join)</p>
-            <input 
-              type="text" 
-              value={roomCode} 
-              onChange={e => setRoomCode(e.target.value.toUpperCase())}
-              placeholder="4-LETTER CODE..."
-              disabled={isLoading}
-              className="w-full bg-white text-bruise-purple font-display text-2xl text-center py-2 rounded-xl border-4 border-bruise-purple focus:outline-none focus:border-toxic-green uppercase placeholder:text-bruise-purple/30 disabled:opacity-50 transition-colors"
-              maxLength={4}
-            />
-          </SlimeBox>
-
-          <div className="flex gap-2 pt-2">
-            <div className="flex-1">
-              <SlimeBox 
-                color="yellow" 
-                onClick={handleJoin} 
-                disabled={!name.trim() || roomCode.trim().length !== 4 || isLoading}
-                className="!min-h-[90px] !p-2"
-              >
-                <span className="font-display text-2xl text-white text-outline tracking-wider leading-none">JOIN GAME</span>
-              </SlimeBox>
-            </div>
-            <div className="flex-1">
-              <SlimeBox 
-                color="green" 
-                onClick={handleHost} 
-                disabled={!name.trim() || isLoading}
-                className="!min-h-[90px] !p-2"
-              >
-                <span className="font-display text-2xl text-white text-outline tracking-wider leading-none">HOST GAME</span>
-              </SlimeBox>
-            </div>
-          </div>
-
-          {/* New How To Play Button */}
-          <div className="pt-1">
-            <SlimeBox 
-              color="purple" 
-              onClick={() => router.push("/how-to-play")} 
-              disabled={isLoading}
-              className="!min-h-[80px] !p-2"
+          {/* Animated Logo */}
+          <div className="text-center mb-6 flex flex-col items-center">
+            <motion.div
+              animate={{ 
+                rotate: [-2, 2, -2], 
+                scale: [0.97, 1.03, 0.97] 
+              }}
+              transition={{ 
+                duration: 4, 
+                repeat: Infinity, 
+                ease: "easeInOut" 
+              }}
             >
-              <span className="font-display text-2xl text-white text-outline tracking-wider leading-none">HOW TO PLAY</span>
-            </SlimeBox>
+              <Image 
+                src="/Senseless Logo.png" 
+                alt="Senseless Game Logo" 
+                width={260} 
+                height={120} 
+                className="drop-shadow-chunky"
+                priority
+              />
+            </motion.div>
           </div>
 
+          {errorMsg && (
+            <div className="bg-warning-yellow text-bruise-purple font-bold p-3 rounded-xl text-center mb-4 border-4 border-bruise-purple shadow-chunky z-10 relative">
+              {errorMsg}
+            </div>
+          )}
+
+          <div className="space-y-3 z-10 relative w-full">
+            
+            <SlimeBox color="pink" className="!min-h-[110px] !p-4">
+              <p className="text-white font-black uppercase text-[10px] tracking-widest mb-1 text-outline">Meat-Sack Name</p>
+              <input 
+                type="text" 
+                value={name} 
+                onChange={e => setName(e.target.value)}
+                placeholder="ENTER NAME..."
+                disabled={isLoading}
+                className="w-full bg-white text-bruise-purple font-display text-2xl text-center py-2 rounded-xl border-4 border-bruise-purple focus:outline-none focus:border-toxic-green uppercase placeholder:text-bruise-purple/30 disabled:opacity-50 transition-colors"
+                maxLength={15}
+              />
+            </SlimeBox>
+
+            <SlimeBox color="blue" className="!min-h-[110px] !p-4">
+              <p className="text-white font-black uppercase text-[10px] tracking-widest mb-1 text-outline">Room Code (To Join)</p>
+              <input 
+                type="text" 
+                value={roomCode} 
+                onChange={e => setRoomCode(e.target.value.toUpperCase())}
+                placeholder="4-LETTER CODE..."
+                disabled={isLoading}
+                className="w-full bg-white text-bruise-purple font-display text-2xl text-center py-2 rounded-xl border-4 border-bruise-purple focus:outline-none focus:border-toxic-green uppercase placeholder:text-bruise-purple/30 disabled:opacity-50 transition-colors"
+                maxLength={4}
+              />
+            </SlimeBox>
+
+            <div className="flex gap-2 pt-2">
+              <div className="flex-1">
+                <SlimeBox 
+                  color="yellow" 
+                  onClick={handleJoin} 
+                  disabled={!name.trim() || roomCode.trim().length !== 4 || isLoading}
+                  className="!min-h-[90px] !p-2"
+                >
+                  <span className="font-display text-2xl text-white text-outline tracking-wider leading-none">JOIN GAME</span>
+                </SlimeBox>
+              </div>
+              <div className="flex-1">
+                <SlimeBox 
+                  color="green" 
+                  onClick={handleHost} 
+                  disabled={!name.trim() || isLoading}
+                  className="!min-h-[90px] !p-2"
+                >
+                  <span className="font-display text-2xl text-white text-outline tracking-wider leading-none">HOST GAME</span>
+                </SlimeBox>
+              </div>
+            </div>
+
+            {/* How To Play Button */}
+            <div className="pt-1">
+              <SlimeBox 
+                color="purple" 
+                onClick={() => router.push("/how-to-play")} 
+                disabled={isLoading}
+                className="!min-h-[80px] !p-2"
+              >
+                <span className="font-display text-2xl text-white text-outline tracking-wider leading-none">HOW TO PLAY</span>
+              </SlimeBox>
+            </div>
+
+          </div>
         </div>
       </div>
     </GrossOutContainer>
