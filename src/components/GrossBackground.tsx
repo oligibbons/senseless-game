@@ -75,17 +75,20 @@ export default function GrossBackground() {
               opacity: 0 
             }}
             animate={{ 
-              // Drifting motion with slightly increased variance for the busier field
-              y: [`${icon.y}vh`, `${(icon.y + 15) % 100}vh`, `${icon.y}vh`],
-              x: [`${icon.x}vw`, `${(icon.x + 8) % 100}vw`, `${icon.x}vw`],
-              rotate: [icon.rotation, icon.rotation + 360],
-              opacity: icon.opacity
+              // Changed to a smooth linear drift without modulo to prevent teleporting while visible
+              y: [`${icon.y}vh`, `${icon.y - 30}vh`],
+              x: [`${icon.x}vw`, `${icon.x + 15}vw`],
+              rotate: [icon.rotation, icon.rotation + 180],
+              // Fade in, hold, fade out
+              opacity: [0, icon.opacity, icon.opacity, 0]
             }}
             transition={{
               duration: icon.duration,
               repeat: Infinity,
               delay: icon.delay,
               ease: "linear",
+              // Maps exactly to the opacity array: 0% -> 20% -> 80% -> 100% of the duration
+              times: [0, 0.2, 0.8, 1] 
             }}
             className="absolute"
             style={{

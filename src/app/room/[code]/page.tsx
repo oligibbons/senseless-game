@@ -148,7 +148,6 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
     : sortedPlayers.length > 0 && sortedPlayers[0].score >= room.round_settings.target;
 
   const handleStartGame = async () => {
-    // Added safety check for currentPlayerId to satisfy TypeScript string requirement
     if (!isHost || !canStart || isStarting || !currentPlayerId) return;
     playSFX("lobby_start");
     setIsStarting(true);
@@ -159,19 +158,12 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
     }
   };
 
-  const handleNukeRoom = async () => {
-    if (!isHost || !currentPlayerId) return;
-    playSFX("lobby_nuke");
-    await closeRoomAction(code, currentPlayerId);
-  };
-
   const handleUpdateSettings = async (mode: 'rounds' | 'score', val: number) => {
     if (!isHost || !currentPlayerId) return;
     await updateSettingsAction(code, currentPlayerId, mode, val);
   };
 
   const handlePlayAgain = async () => {
-    // Added safety check for currentPlayerId to satisfy TypeScript string requirement
     if (!isHost || !currentPlayerId) return;
     playSFX("lobby_start");
     await playAgainAction(code, currentPlayerId);
@@ -242,10 +234,42 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                 onClick={() => setShowSettings(!showSettings)} 
                 className="text-xs bg-bruise-purple text-white px-3 py-2 rounded-xl shadow-chunky transition-transform active:scale-90 font-bold uppercase"
               >
-                Config
+                {showSettings ? "CLOSE" : "CONFIG"}
               </button>
             )}
           </div>
+
+          {/* New Config Panel */}
+          <AnimatePresence>
+            {showSettings && isHost && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                animate={{ opacity: 1, height: "auto", marginBottom: 16 }}
+                exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                className="overflow-hidden"
+              >
+                <SlimeBox color="purple" className="!p-4 !min-h-[80px]">
+                  <p className="font-sans text-white font-black uppercase tracking-widest text-[10px] text-outline mb-2 text-left">
+                    Game Settings
+                  </p>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => handleUpdateSettings('rounds', 3)}
+                      className={`flex-1 font-display text-xl py-2 rounded-xl border-4 transition-colors ${room.round_settings.mode === 'rounds' ? 'bg-toxic-green border-white text-bruise-purple' : 'bg-bruise-purple border-bruise-purple text-white/50'}`}
+                    >
+                      3 ROUNDS
+                    </button>
+                    <button 
+                      onClick={() => handleUpdateSettings('score', 10)}
+                      className={`flex-1 font-display text-xl py-2 rounded-xl border-4 transition-colors ${room.round_settings.mode === 'score' ? 'bg-toxic-green border-white text-bruise-purple' : 'bg-bruise-purple border-bruise-purple text-white/50'}`}
+                    >
+                      FIRST TO 10
+                    </button>
+                  </div>
+                </SlimeBox>
+              </motion.div>
+            )}
+          </AnimatePresence>
           
           {sortedPlayers.map((player, idx) => (
             <motion.div variants={itemVariants} key={player.id}>
