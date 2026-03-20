@@ -6,12 +6,13 @@ import { supabase } from "@/src/lib/supabase";
 import { finalizeRoundAction } from "@/src/app/actions/resolution";
 import { Player, Prompt } from "@/src/types/database";
 import levenshtein from "fast-levenshtein";
-import { motion, Variants } from "framer-motion";
+import { motion, Variants, AnimatePresence } from "framer-motion";
 import { GrossOutContainer, ScreenShake } from "@/src/components/GrossOutContainer";
 import { SlimeBox } from "@/src/components/SlimeBox";
 import { GameIcon, IconType } from "@/src/components/GameIcon";
 import { MeatSackLoader } from "@/src/components/MeatSackLoader";
 import { useAudio } from "@/src/components/AudioProvider";
+import { BumpyText } from "@/src/components/BumpyText";
 
 const senseToIcon: Record<string, IconType> = {
   Sight: "sight",
@@ -39,17 +40,14 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
   const [stealResult, setStealResult] = useState<"pending" | "success" | "failed">("pending");
   const [isFinalizing, setIsFinalizing] = useState(false);
 
-  const [hasPlayedDrumroll, setHasPlayedDrumroll] = useState(false);
+  // New states for the Blind Voting Reveal
+  const [revealPhase, setRevealPhase] = useState<"loading" | "tallying" | "drumroll" | "revealed">("loading");
+  const [validVotes, setValidVotes] = useState<{voterName: string, targetId: string}[]>([]);
+  const [shownVotes, setShownVotes] = useState<{voterName: string, targetId: string}[]>([]);
+
   const [hasPlayedReveal, setHasPlayedReveal] = useState(false);
   const [hasPlayedStealAlarm, setHasPlayedStealAlarm] = useState(false);
   const [hasPlayedStealResult, setHasPlayedStealResult] = useState(false);
-
-  useEffect(() => {
-    if (!hasPlayedDrumroll) {
-      playSFX("res_drumroll");
-      setHasPlayedDrumroll(true);
-    }
-  }, [hasPlayedDrumroll, playSFX]);
 
   useEffect(() => {
     const localId = localStorage.getItem("senseless_player_id");
@@ -94,6 +92,14 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
         const caught = peopleWithMaxVotes.length === 1 && peopleWithMaxVotes[0] === foundImposter.id;
         setIsCaught(caught);
       }
+
+      // Extract and shuffle the votes for the blind reveal sequence
+      const votes = typedPlayers
+        .filter(p => p.voted_for)
+        .map(p => ({ voterName: p.player_name, targetId: p.voted_for as string }));
+      
+      setValidVotes(votes.sort(() => Math.random() - 0.5));
+      setRevealPhase("tallying");
     };
 
     loadResolutionData();
@@ -104,7 +110,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "rooms", filter: `room_code=eq.${code}` },
         (payload) => {
-          // NEXT.JS 16 FIX: Cast to string for safe comparison with Discriminated Unions
           const newStatus = payload.new.game_status as string;
           if (newStatus === "lobby") {
             router.push(`/room/${code}`);
@@ -120,23 +125,56 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
     };
   }, [code, router]);
 
+  // --- THE TENSION BUILDER (Tallying Sequence) ---
   useEffect(() => {
-    if (isCaught !== null && !hasPlayedReveal) {
+    if (revealPhase !== "tallying" || validVotes.length === 0) return;
+
+    if (shownVotes.length < validVotes.length) {
+      // Drop a vote every 1.2 seconds
+      const timer = setTimeout(() => {
+        playSFX("ui_splat");
+        setShownVotes(prev => [...prev, validVotes[prev.length]]);
+      }, 1200);
+      return () => clearTimeout(timer);
+    } else if (shownVotes.length === validVotes.length) {
+      // All votes cast. Pause, then trigger the drumroll.
+      const timer = setTimeout(() => {
+        setRevealPhase("drumroll");
+        playSFX("res_drumroll");
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [shownVotes.length, validVotes.length, revealPhase, playSFX]);
+
+  // Transition from drumroll to final reveal
+  useEffect(() => {
+    if (revealPhase === "drumroll") {
+      const timer = setTimeout(() => {
+        setRevealPhase("revealed");
+      }, 2500); // Wait for the drumroll sound to peak
+      return () => clearTimeout(timer);
+    }
+  }, [revealPhase]);
+
+  // Play the caught/escaped sound immediately upon reveal
+  useEffect(() => {
+    if (revealPhase === "revealed" && isCaught !== null && !hasPlayedReveal) {
       if (isCaught) playSFX("res_caught");
       else playSFX("res_escaped");
       setHasPlayedReveal(true);
     }
-  }, [isCaught, hasPlayedReveal, playSFX]);
+  }, [revealPhase, isCaught, hasPlayedReveal, playSFX]);
 
+  // --- STEAL MECHANIC SOUNDS ---
   useEffect(() => {
-    if (isCaught && stealResult === "pending" && !hasPlayedStealAlarm) {
+    if (revealPhase === "revealed" && isCaught && stealResult === "pending" && !hasPlayedStealAlarm) {
       const t = setTimeout(() => {
         playSFX("steal_alarm");
         setHasPlayedStealAlarm(true);
       }, 1000);
       return () => clearTimeout(t);
     }
-  }, [isCaught, stealResult, hasPlayedStealAlarm, playSFX]);
+  }, [revealPhase, isCaught, stealResult, hasPlayedStealAlarm, playSFX]);
 
   useEffect(() => {
     if (stealResult !== "pending" && !hasPlayedStealResult) {
@@ -147,7 +185,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
   }, [stealResult, hasPlayedStealResult, playSFX]);
 
   const handleStealAttempt = async () => {
-    // FIX: Combined the null checks to ensure 'imposter' is not null for the Action call
     if (!imposter || !prompt || isFinalizing) return;
     
     playSFX("ui_splat");
@@ -168,7 +205,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
     setStealResult(success ? "success" : "failed");
     
     try {
-      // TypeScript now knows 'imposter.id' is a string
       await finalizeRoundAction(code, imposter.id, true, success);
     } catch (error) {
       console.error("Failed to finalize steal:", error);
@@ -177,7 +213,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
   };
 
   const handleHostContinue = async () => {
-    // FIX: Added !imposter check to narrow the type for the Action call
     if (!imposter || isFinalizing) return;
     
     playSFX("ui_splat");
@@ -204,7 +239,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
     return roundScore;
   };
 
-  if (!imposter || isCaught === null) {
+  if (!imposter || isCaught === null || revealPhase === "loading") {
     return (
       <MeatSackLoader className="flex items-center justify-center flex-grow min-h-full">
         <div className="font-display text-4xl text-bruise-purple text-outline text-white uppercase">
@@ -240,9 +275,63 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
     }
   };
 
+  // --- RENDER THE BLIND TALLYING SCREEN ---
+  if (revealPhase === "tallying" || revealPhase === "drumroll") {
+    return (
+      <GrossOutContainer>
+        <div className="flex flex-col flex-grow min-h-full p-4 text-center justify-center">
+          <motion.h1 
+            animate={revealPhase === "drumroll" ? { y: [-5, 5, -5, 5, 0], x: [-5, 5, -5, 5, 0] } : {}}
+            transition={{ duration: 0.1, repeat: revealPhase === "drumroll" ? Infinity : 0 }}
+            className="font-display text-5xl text-warning-yellow text-outline drop-shadow-chunky uppercase mb-8 leading-none"
+          >
+            <BumpyText text={revealPhase === "drumroll" ? "THE TRUTH IS..." : "TALLYING VOTES..."} />
+          </motion.h1>
+          
+          <div className="flex flex-col gap-3 w-full max-w-[350px] mx-auto">
+            {players.map(p => {
+              const votesReceived = shownVotes.filter(v => v.targetId === p.id);
+              // Gently pulse the box if they are actively receiving votes
+              return (
+                <motion.div 
+                  key={p.id}
+                  animate={votesReceived.length > 0 ? { scale: [1, 1.05, 1] } : {}}
+                  transition={{ duration: 0.3 }}
+                >
+                  <SlimeBox color="purple" className="!min-h-[80px] !p-4 relative overflow-hidden">
+                    <div className="flex justify-between items-center w-full z-10 relative">
+                      <span className="font-display text-3xl text-white text-outline leading-none text-left truncate pr-2">
+                        {p.player_name}
+                      </span>
+                      <div className="flex gap-1 shrink-0">
+                        <AnimatePresence>
+                          {votesReceived.map((v, i) => (
+                            <motion.div
+                              key={i}
+                              initial={{ scale: 0, rotate: -45, opacity: 0 }}
+                              animate={{ scale: 1, rotate: Math.random() * 20 - 10, opacity: 1 }}
+                              transition={{ type: "spring", stiffness: 500, damping: 15 }}
+                            >
+                              <GameIcon type="splat" size={35} className="drop-shadow-chunky" />
+                            </motion.div>
+                          ))}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                  </SlimeBox>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </GrossOutContainer>
+    );
+  }
+
+  // --- RENDER THE FINAL REVEAL (AUTOPSY) ---
   return (
-    <ScreenShake trigger={isCaught}>
-      <GrossOutContainer delay={0.2}>
+    <ScreenShake trigger={isCaught && revealPhase === "revealed"}>
+      <GrossOutContainer delay={0.1}>
         <div className="flex flex-col flex-grow min-h-full p-4 text-center overflow-y-auto pb-8">
           
           <div className="mt-4 space-y-2 border-b-8 border-bruise-purple pb-6 shrink-0 relative">
@@ -256,7 +345,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
                   animate="visible"
                   className="font-display text-5xl drop-shadow-chunky leading-none text-white text-outline"
                 >
-                  {imposter.player_name}
+                  <BumpyText text={imposter.player_name} />
                 </motion.h1>
               </div>
             </SlimeBox>
@@ -268,7 +357,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
                 animate="visible"
                 className="bg-toxic-green text-white text-outline font-display text-5xl py-2 px-6 rounded-xl shadow-chunky inline-block transform rotate-2 border-4 border-bruise-purple -mt-8 relative z-20"
               >
-                CAUGHT!
+                <BumpyText text="CAUGHT!" />
               </motion.div>
             ) : (
               <motion.div 
@@ -277,7 +366,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
                 animate="visible"
                 className="bg-fleshy-pink text-white text-outline font-display text-5xl py-2 px-6 rounded-xl shadow-chunky inline-block transform -rotate-2 border-4 border-bruise-purple -mt-8 relative z-20"
               >
-                ESCAPED!
+                <BumpyText text="ESCAPED!" />
               </motion.div>
             )}
           </div>
@@ -361,7 +450,9 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
               </SlimeBox>
 
               <div className="mt-4 text-left w-full">
-                <h3 className="font-display text-4xl text-fleshy-pink text-outline text-white mb-4 text-center drop-shadow-chunky">THE AUTOPSY</h3>
+                <h3 className="font-display text-4xl text-fleshy-pink text-outline text-white mb-4 text-center drop-shadow-chunky">
+                  <BumpyText text="THE AUTOPSY" />
+                </h3>
                 <div className="flex flex-col gap-4">
                   {players.map(p => {
                     const voters = players.filter(voter => voter.voted_for === p.id);

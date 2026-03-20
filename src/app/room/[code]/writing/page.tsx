@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, use, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
-import { submitClueAction } from "@/src/app/actions/writing";
+import { submitClueAction, toggleRerollVoteAction } from "@/src/app/actions/writing";
 import { SlimeBox } from "@/src/components/SlimeBox";
 import { useAudio } from "@/src/components/AudioProvider";
 import { motion, useAnimation } from "framer-motion";
@@ -11,6 +11,7 @@ import { Player } from "@/src/types/database";
 import { GameIcon, IconType } from "@/src/components/GameIcon";
 import { MeatSackLoader } from "@/src/components/MeatSackLoader";
 import { DynamicDowntime } from "@/src/components/DynamicDowntime";
+import { BumpyText } from "@/src/components/BumpyText";
 
 const SENSE_UI: Record<string, { icon: IconType; verb: string; color: string }> = {
   Sight: { icon: "sight", verb: "LOOK", color: "text-fleshy-pink" },
@@ -20,8 +21,8 @@ const SENSE_UI: Record<string, { icon: IconType; verb: string; color: string }> 
   Taste: { icon: "taste", verb: "TASTE", color: "text-warning-yellow" },
 };
 
-// Updated type to include player_name for our downtime text
-type WritingPlayer = Pick<Player, "id" | "player_name" | "is_imposter" | "assigned_sense" | "current_clue">;
+// Updated type to include wants_reroll tracking
+type WritingPlayer = Pick<Player, "id" | "player_name" | "is_imposter" | "assigned_sense" | "current_clue" | "wants_reroll">;
 
 export default function WritingPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
@@ -35,10 +36,53 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   const [clue, setClue] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isTogglingReroll, setIsTogglingReroll] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [hasRevealed, setHasRevealed] = useState(false);
 
   const inputShakeControls = useAnimation();
+  const currentPromptRef = useRef<string | null>(null);
+
+  // We extract loadPhaseData so it can be re-run if a reroll occurs
+  const loadPhaseData = async (localId: string) => {
+    const { data: room } = await supabase
+      .from("rooms")
+      .select("current_prompt_id")
+      .eq("room_code", code)
+      .single();
+
+    if (!room || !room.current_prompt_id) return;
+    currentPromptRef.current = room.current_prompt_id;
+
+    const { data: playersData } = await supabase
+      .from("players")
+      .select("id, player_name, is_imposter, assigned_sense, current_clue, wants_reroll")
+      .eq("room_code", code);
+
+    if (!playersData) return;
+    
+    const typedPlayers = playersData as WritingPlayer[];
+    setPlayers(typedPlayers);
+
+    const me = typedPlayers.find(p => p.id === localId);
+    if (!me) return;
+
+    setSense(me.assigned_sense || "Sight");
+
+    if (me.current_clue) {
+      setIsSubmitted(true);
+    }
+
+    const { data: prompt } = await supabase
+      .from("prompts")
+      .select("true_target, imposter_target")
+      .eq("id", room.current_prompt_id)
+      .single();
+
+    if (!prompt) return;
+
+    setTarget(me.is_imposter ? prompt.imposter_target : prompt.true_target);
+  };
 
   useEffect(() => {
     const localId = localStorage.getItem("senseless_player_id");
@@ -47,49 +91,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
       return;
     }
     setPlayerId(localId);
-
-    const loadPhaseData = async () => {
-      const { data: room } = await supabase
-        .from("rooms")
-        .select("current_prompt_id")
-        .eq("room_code", code)
-        .single();
-
-      if (!room || !room.current_prompt_id) return;
-
-      // Fetch ALL players to track who is still writing
-      const { data: playersData } = await supabase
-        .from("players")
-        .select("id, player_name, is_imposter, assigned_sense, current_clue")
-        .eq("room_code", code);
-
-      if (!playersData) return;
-      
-      const typedPlayers = playersData as WritingPlayer[];
-      setPlayers(typedPlayers);
-
-      // Find the local user's specific data
-      const me = typedPlayers.find(p => p.id === localId);
-      if (!me) return;
-
-      setSense(me.assigned_sense || "Sight");
-
-      if (me.current_clue) {
-        setIsSubmitted(true);
-      }
-
-      const { data: prompt } = await supabase
-        .from("prompts")
-        .select("true_target, imposter_target")
-        .eq("id", room.current_prompt_id)
-        .single();
-
-      if (!prompt) return;
-
-      setTarget(me.is_imposter ? prompt.imposter_target : prompt.true_target);
-    };
-
-    loadPhaseData();
+    loadPhaseData(localId);
 
     const channel = supabase
       .channel(`writing_${code}`)
@@ -99,15 +101,26 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
         (payload) => {
           if (payload.new.game_status === "voting") {
             router.push(`/room/${code}/voting`);
+          } else if (payload.new.current_prompt_id && payload.new.current_prompt_id !== currentPromptRef.current) {
+            // A REROLL HAPPENED! Wipe local states and reload.
+            playSFX("write_reveal");
+            setClue("");
+            setIsSubmitted(false);
+            loadPhaseData(localId);
           }
         }
       )
       .on(
-        // Listen for player updates to dynamically update the downtime text
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "players", filter: `room_code=eq.${code}` },
         (payload) => {
           setPlayers((prev) => prev.map((p) => (p.id === payload.new.id ? { ...p, ...payload.new } : p)));
+          
+          // Failsafe: If the server wipes our clue (due to reroll), unlock the UI
+          if (payload.new.id === localId && payload.new.current_clue === null) {
+              setIsSubmitted(false);
+              setClue("");
+          }
         }
       )
       .subscribe();
@@ -115,7 +128,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [code, router]);
+  }, [code, router, playSFX]);
 
   useEffect(() => {
     if (target && sense && !hasRevealed && !isSubmitted) {
@@ -136,7 +149,6 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
 
       if (result.success) {
         setIsSubmitted(true);
-        // Optimistically update local state to avoid waiting for the socket bounce-back
         setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, current_clue: clue } : p));
       } else {
         setErrorMsg(result.error || "Failed to submit clue.");
@@ -147,6 +159,18 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
       setErrorMsg("A brain-fart occurred. Try again.");
       setIsSubmitting(false);
     }
+  };
+
+  const handleRerollToggle = async (wantsReroll: boolean) => {
+    if (!playerId || isTogglingReroll) return;
+    playSFX("ui_squish");
+    setIsTogglingReroll(true);
+    
+    // Optimistic UI update
+    setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, wants_reroll: wantsReroll } : p));
+    
+    await toggleRerollVoteAction(playerId, code, wantsReroll);
+    setIsTogglingReroll(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -173,18 +197,39 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   const charsLeft = 50 - clue.length;
   const isDangerZone = charsLeft <= 10;
   
-  // Calculate exactly who we are waiting on
   const waitingOnNames = players.filter(p => !p.current_clue).map(p => p.player_name);
+  
+  // Reroll stats
+  const localPlayer = players.find(p => p.id === playerId);
+  const wantsReroll = localPlayer?.wants_reroll || false;
+  const rerollVotes = players.filter(p => p.wants_reroll).length;
+  const totalPlayers = players.length;
+
+  const RerollButton = () => (
+    <button
+      onClick={() => handleRerollToggle(!wantsReroll)}
+      disabled={isTogglingReroll}
+      className={`mt-4 px-6 py-2 rounded-full font-sans font-bold text-xs uppercase border-4 transition-all active:scale-95 ${
+        wantsReroll 
+          ? "bg-fleshy-pink text-white border-white shadow-chunky-pink animate-pulse" 
+          : "bg-white text-bruise-purple border-bruise-purple shadow-[4px_4px_0px_0px_#12001A] opacity-90"
+      }`}
+    >
+      ♻️ Vote to Reroll ({rerollVotes}/{totalPlayers})
+    </button>
+  );
 
   if (isSubmitted) {
     return (
       <div className="flex flex-col flex-grow min-h-full items-center justify-center p-6 text-center space-y-8">
-        <h1 className="font-display text-6xl text-fleshy-pink text-outline drop-shadow-chunky uppercase">Clue Locked</h1>
+        <h1 className="font-display text-6xl text-fleshy-pink text-outline drop-shadow-chunky uppercase">
+          <BumpyText text="Clue Locked" />
+        </h1>
         <MeatSackLoader className="flex flex-col items-center gap-6">
           <GameIcon type={activeSense.icon} size={150} />
-          {/* Using our brand new Dynamic Downtime component */}
           <DynamicDowntime waitingOn={waitingOnNames} />
         </MeatSackLoader>
+        <RerollButton />
       </div>
     );
   }
@@ -197,13 +242,15 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
         </div>
       )}
 
-      <div className="text-center mt-2 mb-6 flex flex-col items-center w-full">
+      <div className="text-center mt-2 mb-4 flex flex-col items-center w-full">
         <SlimeBox color="yellow" className="min-h-[160px] !p-6 w-full">
           <h1 className="font-display text-4xl sm:text-5xl text-white text-outline drop-shadow-chunky leading-tight uppercase">
             What does <span className={activeSense.color}>{target}</span> {activeSense.verb} like?
           </h1>
         </SlimeBox>
         
+        <RerollButton />
+
         <motion.div
           animate={{ 
             scale: [1, 1.1, 1], 
@@ -211,13 +258,13 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
             y: [0, -10, 0]
           }}
           transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-          className="mt-4"
+          className="mt-2"
         >
-          <GameIcon type={activeSense.icon} size={150} />
+          <GameIcon type={activeSense.icon} size={130} />
         </motion.div>
       </div>
 
-      <div className="mt-auto pt-4 flex flex-col gap-4">
+      <div className="mt-auto pt-2 flex flex-col gap-4">
         <motion.div animate={inputShakeControls} className="relative">
           <textarea
             value={clue}

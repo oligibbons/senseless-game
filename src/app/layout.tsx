@@ -4,6 +4,7 @@ import "./globals.css";
 import { AudioProvider } from "@/src/components/AudioProvider";
 import GrossBackground from "@/src/components/GrossBackground";
 import { ConnectionToast } from "@/src/components/ConnectionToast";
+import { WakeLock } from "@/src/components/WakeLock";
 
 // The drippy, gross-out primary font
 const displayFont = Creepster({
@@ -47,11 +48,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // FIX: Variables moved to <html> to ensure global :root scoping
     <html lang="en" className={`${displayFont.variable} ${irishGrover.variable}`}>
       <body className="font-sans bg-white text-bruise-purple antialiased min-h-screen flex justify-center">
         <main className="w-full max-w-[430px] min-h-[100dvh] bg-white relative overflow-x-hidden shadow-2xl flex flex-col">
+          {/* Invisible utilities */}
+          <WakeLock />
           <ConnectionToast />
+          
           <GrossBackground />
           <AudioProvider>
             {children}
