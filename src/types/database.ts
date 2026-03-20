@@ -49,4 +49,7 @@ export interface Player {
   voted_for: string | null; 
   stats: PlayerStats | null; // Tracks cumulative funny stats
   last_score_delta: number | null; // Tracks points gained/lost in the last round
+  
+  // --- NEW VOTE TO REROLL TRACKING ---
+  wants_reroll?: boolean | null; 
 }
