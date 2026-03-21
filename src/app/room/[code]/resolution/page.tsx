@@ -68,7 +68,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
       const { data: room } = await supabase.from("rooms").select("current_prompt_id, host_id, game_status, steal_guess").eq("room_code", code).single();
       if (!room) return;
       
-      // FAILSAGE: Catch players who mount this component when the host has already moved the game forward
       if (room.game_status === "writing") {
         router.push(`/room/${code}/writing`);
         return;
@@ -88,10 +87,12 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
         if (promptData) setPrompt(promptData as Prompt);
       }
 
+      // FIXED: Added .order("player_name") to ensure a consistent, non-jumping player list
       const { data: playersData } = await supabase
         .from("players")
         .select("id, player_name, is_imposter, voted_for, room_code, current_clue, assigned_sense, steal_vote")
-        .eq("room_code", code);
+        .eq("room_code", code)
+        .order("player_name");
 
       if (!playersData) return;
       
@@ -118,6 +119,7 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
         .filter(p => p.voted_for)
         .map(p => ({ voterName: p.player_name, targetId: p.voted_for as string }));
       
+      // Leaving the actual vote reveals randomized for suspense!
       setValidVotes(votes.sort(() => Math.random() - 0.5));
       setRevealPhase("tallying");
     };
@@ -133,7 +135,6 @@ export default function ResolutionPage({ params }: { params: Promise<{ code: str
           const newStatus = payload.new.game_status as string;
           setRoomStatus(newStatus);
           
-          // ADDED: Explicit routing for ALL possible game states
           if (newStatus === "lobby") router.push(`/room/${code}`);
           else if (newStatus === "game_over") router.push(`/room/${code}/game-over`);
           else if (newStatus === "writing") router.push(`/room/${code}/writing`);

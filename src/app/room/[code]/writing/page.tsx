@@ -15,7 +15,6 @@ import { DynamicDowntime } from "@/src/components/DynamicDowntime";
 import { BumpyText } from "@/src/components/BumpyText";
 import GlobalTimer from "@/src/components/GlobalTimer";
 
-// CHANGED: Removed dark 'text-bruise-purple' to prevent the text-outline from turning words into black blobs.
 const SENSE_UI: Record<string, { icon: IconType; verb: string; color: string }> = {
   Sight: { icon: "sight", verb: "LOOK", color: "text-fleshy-pink" },
   Sound: { icon: "sound", verb: "SOUND", color: "text-toxic-green" },
@@ -26,7 +25,6 @@ const SENSE_UI: Record<string, { icon: IconType; verb: string; color: string }> 
 
 type WritingPlayer = Pick<Player, "id" | "player_name" | "is_imposter" | "assigned_sense" | "current_clue" | "wants_reroll">;
 
-// ADDED: Helper to determine proper grammar based on the target word
 const getArticle = (word: string) => {
   if (!word) return "a";
   const firstLetter = word.trim().charAt(0).toLowerCase();
@@ -52,15 +50,16 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
   // Timer specific state
   const [isHost, setIsHost] = useState(false);
   const [promptId, setPromptId] = useState<string>("");
+  const [isTimerEnabled, setIsTimerEnabled] = useState(true); // ADDED: Track timer state
 
   const inputShakeControls = useAnimation();
   const currentPromptRef = useRef<string | null>(null);
 
   const loadPhaseData = async (localId: string) => {
-    // 1. Fetch room data including the host_id
+    // 1. Fetch room data including the host_id AND round_settings
     const { data: room } = await supabase
       .from("rooms")
-      .select("current_prompt_id, host_id")
+      .select("current_prompt_id, host_id, round_settings")
       .eq("room_code", code)
       .single();
 
@@ -69,12 +68,16 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
     currentPromptRef.current = room.current_prompt_id;
     setPromptId(room.current_prompt_id);
     setIsHost(room.host_id === localId);
+    
+    // Parse the JSONB round settings to check if the timer should be enabled
+    setIsTimerEnabled(room.round_settings?.timer_enabled !== false);
 
     // 2. Fetch players
     const { data: playersData } = await supabase
       .from("players")
       .select("id, player_name, is_imposter, assigned_sense, current_clue, wants_reroll")
-      .eq("room_code", code);
+      .eq("room_code", code)
+      .order("player_name");
 
     if (!playersData) return;
     
@@ -120,7 +123,6 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
           if (payload.new.game_status === "voting") {
             router.push(`/room/${code}/voting`);
           } else if (payload.new.current_prompt_id && payload.new.current_prompt_id !== currentPromptRef.current) {
-            // A REROLL HAPPENED! Wipe local states and reload.
             playSFX("write_reveal");
             setClue("");
             setIsSubmitted(false);
@@ -257,6 +259,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
             duration={90} 
             isHost={isHost} 
             onTimeUp={handleTimeUp} 
+            isEnabled={isTimerEnabled} // ADDED
           />
         </div>
 
@@ -274,10 +277,8 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
       )}
 
       <div className="text-center mt-2 mb-4 flex flex-col items-center w-full">
-        {/* CHANGED: Swapped to a purple box to guarantee maximum contrast with the neon text */}
         <SlimeBox color="purple" className="min-h-[160px] !p-6 w-full">
           <h1 className="font-display text-4xl sm:text-5xl text-white text-outline drop-shadow-chunky leading-tight uppercase">
-            {/* ADDED: Dynamic grammar checks for A vs AN */}
             What does {getArticle(target)} <span className={activeSense.color}>{target}</span> {activeSense.verb} like?
           </h1>
         </SlimeBox>
@@ -287,6 +288,7 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
           duration={90} 
           isHost={isHost} 
           onTimeUp={handleTimeUp} 
+          isEnabled={isTimerEnabled} // ADDED
         />
 
         <RerollButton />

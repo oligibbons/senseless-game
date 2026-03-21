@@ -1,3 +1,4 @@
+// src/components/AudioProvider.tsx
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
@@ -74,7 +75,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     };
   }, [hasInteracted]);
 
-  // Sync mute state to the audio element
+  // Sync mute state ONLY to the background music element
   useEffect(() => {
     if (bgmRef.current) {
       bgmRef.current.muted = isMuted;
@@ -88,8 +89,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
 
   // Zero-latency SFX player using preloaded elements
   const playSFX = (sfx: SFX) => {
-    if (isMuted) return;
-    
+    // FIXED: Removed the early return for isMuted so SFX always play!
     const baseAudio = sfxRefs.current[sfx];
     if (baseAudio) {
       // Clone the node so the same sound can overlap if triggered rapidly

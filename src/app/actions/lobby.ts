@@ -16,12 +16,23 @@ export async function closeRoomAction(roomCode: string, hostId: string) {
   }
 }
 
-export async function updateSettingsAction(roomCode: string, hostId: string, mode: "rounds" | "score", target: number) {
+// FIXED: Added timerEnabled parameter
+export async function updateSettingsAction(
+  roomCode: string, 
+  hostId: string, 
+  mode: "rounds" | "score", 
+  target: number, 
+  timerEnabled: boolean = true
+) {
   try {
     const { data: room } = await supabase.from("rooms").select("host_id").eq("room_code", roomCode).single();
     if (room?.host_id !== hostId) throw new Error("Only the host can change settings.");
 
-    await supabase.from("rooms").update({ round_settings: { mode, target } }).eq("room_code", roomCode);
+    // FIXED: Pushing the timer_enabled state into the JSONB object
+    await supabase.from("rooms").update({ 
+      round_settings: { mode, target, timer_enabled: timerEnabled } 
+    }).eq("room_code", roomCode);
+    
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };

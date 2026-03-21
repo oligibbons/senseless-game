@@ -15,7 +15,6 @@ import { useAudio } from "@/src/components/AudioProvider";
 import { BumpyText } from "@/src/components/BumpyText";
 import GlobalTimer from "@/src/components/GlobalTimer";
 
-// ADDED: Mapping the string sense from DB to our Icon component types
 const senseToIcon: Record<string, IconType> = {
   Sight: "sight",
   Sound: "sound",
@@ -64,7 +63,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       const { data: playersData } = await supabase
         .from("players")
         .select("*")
-        .eq("room_code", code);
+        .eq("room_code", code)
+        .order("player_name");
 
       if (playersData) {
         setPlayers(playersData as Player[]);
@@ -172,6 +172,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               duration={60} 
               isHost={isHost} 
               onTimeUp={handleTimeUp} 
+              isEnabled={room.round_settings?.timer_enabled !== false} // ADDED
             />
           </div>
         )}
@@ -199,7 +200,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                         <span className="font-display text-3xl text-white text-outline uppercase tracking-wider">
                           {player.player_name}
                         </span>
-                        {/* CHANGED: Swapped out text pill for our chunky icon */}
                         {player.assigned_sense && (
                           <div className="bg-white rounded-full p-1 border-4 border-bruise-purple shadow-sm transform rotate-3">
                             <GameIcon type={senseToIcon[player.assigned_sense]} size={30} />
@@ -245,6 +245,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   duration={60} 
                   isHost={isHost} 
                   onTimeUp={handleTimeUp} 
+                  isEnabled={room.round_settings?.timer_enabled !== false} // ADDED
                 />
               </div>
             </motion.div>

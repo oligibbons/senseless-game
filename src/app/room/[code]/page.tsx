@@ -1,3 +1,4 @@
+// src/app/room/[code]/page.tsx
 "use client";
 
 import { useEffect, useState, useRef, use } from "react";
@@ -55,7 +56,8 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
       const { data: playersData } = await supabase
         .from("players")
         .select("*")
-        .eq("room_code", code);
+        .eq("room_code", code)
+        .order("player_name");
 
       if (playersData) {
         const typedPlayers = playersData as Player[];
@@ -82,7 +84,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                 playSFX("lobby_join");
               }
               prevPlayerCount.current = newPlayersList.length;
-              return newPlayersList;
+              return newPlayersList.sort((a, b) => a.player_name.localeCompare(b.player_name));
             });
           } else if (payload.eventType === "UPDATE") {
             setPlayers((prev) =>
@@ -161,9 +163,9 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
     }
   };
 
-  const handleUpdateSettings = async (mode: 'rounds' | 'score', val: number) => {
+  const handleUpdateSettings = async (mode: 'rounds' | 'score', val: number, timerEnabled?: boolean) => {
     if (!isHost || !currentPlayerId) return;
-    await updateSettingsAction(code, currentPlayerId, mode, val);
+    await updateSettingsAction(code, currentPlayerId, mode, val, timerEnabled);
   };
 
   const handlePlayAgain = async () => {
@@ -172,22 +174,27 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
     await playAgainAction(code, currentPlayerId);
   };
 
-  // Triggered rapidly while sliding
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setTempTarget(Number(e.target.value));
-    // Provide a subtle physical tick sensation as the slider moves
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(10); 
     }
   };
 
-  // Triggered once when the user lets go of the slider
   const handleSliderCommit = async () => {
     if (tempTarget !== null && isHost && currentPlayerId) {
       playSFX("ui_squish");
-      await handleUpdateSettings(room.round_settings.mode, tempTarget);
-      setTempTarget(null); // Clear local state so it relies on the DB again
+      await handleUpdateSettings(room.round_settings.mode, tempTarget, room.round_settings.timer_enabled);
+      setTempTarget(null);
     }
+  };
+
+  const handleTimerToggle = async () => {
+    if (!isHost || !currentPlayerId) return;
+    playSFX("ui_squish");
+    // If undefined, assume it was true by default
+    const currentTimerState = room.round_settings.timer_enabled !== false;
+    await handleUpdateSettings(room.round_settings.mode, room.round_settings.target, !currentTimerState);
   };
 
   const containerVariants: Variants = {
@@ -272,7 +279,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                 exit={{ opacity: 0, height: 0, marginBottom: 0 }}
                 className="overflow-hidden"
               >
-                <SlimeBox color="purple" className="!p-4 !min-h-[140px] flex flex-col gap-4">
+                <SlimeBox color="purple" className="!p-4 flex flex-col gap-4">
                   
                   {/* Mode Selector */}
                   <div>
@@ -283,7 +290,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                       <button 
                         onClick={() => { 
                           playSFX("ui_squish"); 
-                          handleUpdateSettings('rounds', room.round_settings.mode === 'rounds' ? room.round_settings.target : 3); 
+                          handleUpdateSettings('rounds', room.round_settings.mode === 'rounds' ? room.round_settings.target : 3, room.round_settings.timer_enabled); 
                         }}
                         className={`flex-1 font-display text-2xl py-2 rounded-xl border-4 transition-colors shadow-chunky ${room.round_settings.mode === 'rounds' ? 'bg-toxic-green border-white text-bruise-purple' : 'bg-bruise-purple border-bruise-purple text-white/50 shadow-none'}`}
                       >
@@ -292,7 +299,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                       <button 
                         onClick={() => { 
                           playSFX("ui_squish"); 
-                          handleUpdateSettings('score', room.round_settings.mode === 'score' ? room.round_settings.target : 10); 
+                          handleUpdateSettings('score', room.round_settings.mode === 'score' ? room.round_settings.target : 10, room.round_settings.timer_enabled); 
                         }}
                         className={`flex-1 font-display text-2xl py-2 rounded-xl border-4 transition-colors shadow-chunky ${room.round_settings.mode === 'score' ? 'bg-toxic-green border-white text-bruise-purple' : 'bg-bruise-purple border-bruise-purple text-white/50 shadow-none'}`}
                       >
@@ -327,6 +334,19 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                       onTouchEnd={handleSliderCommit}
                       className="w-full h-4 bg-bruise-purple rounded-full appearance-none outline-none cursor-pointer accent-[#FF007F] shadow-inner"
                     />
+                  </div>
+
+                  {/* ADDED: Timer Toggle */}
+                  <div className="bg-bruise-purple/50 p-3 rounded-xl border-2 border-white/10 flex justify-between items-center">
+                     <label className="font-sans text-white font-bold text-xs uppercase tracking-widest text-outline">
+                        Round Timers
+                      </label>
+                      <button 
+                        onClick={handleTimerToggle}
+                        className={`font-display text-2xl px-6 py-1 rounded-xl border-4 transition-colors shadow-chunky ${room.round_settings.timer_enabled !== false ? 'bg-toxic-green border-white text-bruise-purple' : 'bg-fleshy-pink border-white text-white'}`}
+                      >
+                        {room.round_settings.timer_enabled !== false ? "ON" : "OFF"}
+                      </button>
                   </div>
 
                 </SlimeBox>

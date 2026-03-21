@@ -1,3 +1,4 @@
+// src/components/GlobalTimer.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -8,19 +9,18 @@ interface GlobalTimerProps {
   duration?: number;
   onTimeUp: () => void;
   isHost: boolean;
-  /* * NOTE: We don't need a specific "reset" prop. 
-   * When implementing this, pass `key={room.current_prompt_id}`. 
-   * React will automatically unmount and reset this component when the key changes!
-   */
+  isEnabled?: boolean; // ADDED: Allow disabling the timer entirely
 }
 
-export default function GlobalTimer({ duration = 90, onTimeUp, isHost }: GlobalTimerProps) {
+export default function GlobalTimer({ duration = 90, onTimeUp, isHost, isEnabled = true }: GlobalTimerProps) {
   const [timeLeft, setTimeLeft] = useState(duration);
   const { playSFX } = useAudio();
 
   useEffect(() => {
+    // If timers are turned off in lobby config, bypass all countdown logic
+    if (!isEnabled) return;
+
     // If time runs out, ONLY the host triggers the completion action.
-    // This prevents 8 players from firing 8 database updates simultaneously.
     if (timeLeft <= 0) {
       if (isHost) {
         onTimeUp();
@@ -38,7 +38,24 @@ export default function GlobalTimer({ duration = 90, onTimeUp, isHost }: GlobalT
     }, 1000);
 
     return () => clearInterval(timerId);
-  }, [timeLeft, isHost, onTimeUp, playSFX]);
+  }, [timeLeft, isHost, onTimeUp, playSFX, isEnabled]);
+
+  // If Disabled, render a static "No Time Limit" UI
+  if (!isEnabled) {
+    return (
+      <div className="w-full flex flex-col items-center gap-2 mt-6 opacity-80">
+        <div className="w-full max-w-md h-8 bg-white border-4 border-black rounded-full shadow-chunky overflow-hidden relative">
+          <div className="h-full bg-senseless-green w-full border-r-4 border-black" />
+          <div className="absolute inset-0 flex items-center justify-center font-display font-bold text-black text-sm tracking-widest drop-shadow-sm mix-blend-difference text-white uppercase">
+            NO TIME LIMIT
+          </div>
+        </div>
+        <p className="text-xs font-bold uppercase opacity-60 text-center">
+          Take your time, meat-sacks...
+        </p>
+      </div>
+    );
+  }
 
   // Calculate progress percentage for the shrinking bar
   const progress = (timeLeft / duration) * 100;
