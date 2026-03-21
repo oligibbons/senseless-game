@@ -1,7 +1,7 @@
 // src/components/SlimeBox.tsx
 "use client";
 
-import { ReactNode, useId, useRef } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { motion, useInView } from "framer-motion";
 import { useAudio } from "@/src/components/AudioProvider";
 
@@ -13,27 +13,51 @@ interface SlimeBoxProps {
   className?: string;
   onClick?: () => void;
   disabled?: boolean;
+  staticMode?: boolean; // Turns off continuous morphing/breathing for scrollable lists
 }
 
+// SLIGHTLY MUTED PALETTE: Less "neon plastic", more "sickly slime"
 const colorMap: Record<SlimeColor, string> = {
-  purple: "#A855F7", 
-  pink: "#FF007F",   
-  green: "#39FF14",  
-  blue: "#06B6D4",   
-  orange: "#FF6B35", 
-  yellow: "#FFD700", 
+  purple: "#984DE3", 
+  pink: "#ED1E79",   
+  green: "#45DB26",  
+  blue: "#16A8C7",   
+  orange: "#F26522", 
+  yellow: "#F2CC0F", 
 };
 
-export function SlimeBox({ children, color, className = "", onClick, disabled = false }: SlimeBoxProps) {
+interface DripConfig {
+  id: number;
+  left: string;
+  width: string;
+  height: string;
+  duration: number;
+  delay: number;
+}
+
+export function SlimeBox({ children, color, className = "", onClick, disabled = false, staticMode = false }: SlimeBoxProps) {
   const hexColor = colorMap[color] || colorMap.green;
-  const filterId = useId().replace(/:/g, "-"); 
   const { playSFX } = useAudio();
   
-  // Performance Ref: Tracks if this specific box is visible on screen
   const containerRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(containerRef, { margin: "100px" });
+  
+  const [drips, setDrips] = useState<DripConfig[]>([]);
 
   const isInteractive = !!onClick && !disabled;
+
+  useEffect(() => {
+    const numDrips = Math.floor(Math.random() * 4) + 2; // 2 to 5 drips
+    const newDrips = Array.from({ length: numDrips }).map((_, i) => ({
+      id: i,
+      left: `${10 + Math.random() * 75}%`, 
+      width: `${12 + Math.random() * 8}px`, 
+      height: `${25 + Math.random() * 45}px`, 
+      duration: 8 + Math.random() * 7, // 8s to 15s per cycle
+      delay: -(Math.random() * 15), 
+    }));
+    setDrips(newDrips);
+  }, []);
 
   const handleClick = (e: React.MouseEvent) => {
     if (disabled && onClick) {
@@ -46,149 +70,122 @@ export function SlimeBox({ children, color, className = "", onClick, disabled = 
     }
   };
 
-  return (
-    <div 
-      ref={containerRef}
-      className={`relative w-full pb-12 ${disabled ? "opacity-50 cursor-not-allowed grayscale-[50%]" : ""}`}
-      role={onClick ? "button" : "presentation"}
-    >
-      
-      {/* 1. SLOW VISCOUS BOIL (Optimized SVG Filter) */}
-      <svg className="absolute w-0 h-0" aria-hidden="true">
-        <filter id={`wavy-${filterId}`} x="-20%" y="-20%" width="140%" height="140%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="1" result="noise">
-            {isInView && (
-              <animate attributeName="baseFrequency" values="0.015;0.022;0.015" dur={`${12 + Math.random() * 5}s`} repeatCount="indefinite" />
-            )}
-          </feTurbulence>
-          <feDisplacementMap in="SourceGraphic" in2="noise" scale="15" xChannelSelector="R" yChannelSelector="G" />
-        </filter>
-      </svg>
+  const shouldAnimate = !staticMode && isInView;
 
-      {/* 2. THE MASTER WRAPPER (Handles GPU Scaling & Interaction) */}
-      <motion.div
-        animate={isInView ? { scale: [1, 0.97, 1] } : { scale: 1 }}
-        transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
-        whileHover={isInteractive ? { scale: 1.02, rotate: -1 } : {}}
-        whileTap={isInteractive ? { scale: 0.95 } : {}}
-        onClick={onClick || disabled ? handleClick : undefined}
-        className={`relative w-full ${isInteractive ? "cursor-pointer" : ""}`}
-        style={{ willChange: "transform", transformOrigin: "center center" }}
+  return (
+    <motion.div 
+      ref={containerRef}
+      className={`relative w-full pb-12 ${disabled ? "opacity-50 cursor-not-allowed grayscale-[50%]" : ""} ${isInteractive ? "cursor-pointer" : ""}`}
+      role={onClick ? "button" : "presentation"}
+      whileHover={isInteractive ? { scale: 1.02, rotate: -1 } : {}}
+      whileTap={isInteractive ? { scale: 0.95 } : {}}
+      onClick={onClick || disabled ? handleClick : undefined}
+    >
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @keyframes blobMorph {
+            0%, 100% { border-radius: 12px 32px 16px 40px; }
+            25% { border-radius: 32px 16px 40px 12px; }
+            50% { border-radius: 16px 40px 12px 32px; }
+            75% { border-radius: 32px 40px 16px 12px; }
+          }
+          @keyframes blobBreathe {
+            0%, 100% { transform: scale3d(1, 1, 1); }
+            50% { transform: scale3d(0.98, 0.97, 1); }
+          }
+          @keyframes dripStretch {
+            0%, 100% { transform: scale3d(1, 1, 1); }
+            50% { transform: scale3d(0.5, 2.5, 1); }
+          }
+          @keyframes dripDrop {
+            0%, 45% { transform: translate3d(0, 0, 0) scale3d(0, 0, 1); opacity: 0; }
+            50%  { transform: translate3d(0, 20px, 0) scale3d(1.2, 1.2, 1); opacity: 1; }
+            100% { transform: translate3d(0, 90px, 0) scale3d(0.5, 0.5, 1); opacity: 0; }
+          }
+        `
+      }} />
+
+      <div 
+        className="relative w-full"
+        style={{ 
+          animation: shouldAnimate ? 'blobBreathe 4.5s ease-in-out infinite' : 'none',
+          transformOrigin: 'center center',
+          filter: 'drop-shadow(8px 8px 0px rgba(18,0,26,0.9))',
+          willChange: shouldAnimate ? 'transform' : 'auto'
+        }}
       >
-        {/* 3. VISUAL BACKGROUND (Filtered Layer) */}
-        <div 
-          className="absolute inset-0 z-0 pointer-events-none" 
-          style={{ 
-            filter: `url(#wavy-${filterId}) drop-shadow(8px 8px 0px rgba(18,0,26,0.9))`,
-            WebkitTransform: "translateZ(0)",
-            transform: "translateZ(0)"
+        <div
+          className="relative w-full h-full border-bruise-purple overflow-hidden"
+          style={{
+            backgroundColor: hexColor,
+            animation: shouldAnimate ? 'blobMorph 5s ease-in-out infinite' : 'none',
+            borderRadius: '12px 32px 16px 40px',
+            borderStyle: 'solid',
+            borderWidth: '5px 7px 4px 6px',
+            // Added back some cheap radial gradients for sludge texture
+            backgroundImage: `
+              linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 40%, rgba(0,0,0,0.15) 100%),
+              radial-gradient(circle at 80% 20%, rgba(255,255,255,0.1) 0%, transparent 20%),
+              radial-gradient(circle at 20% 80%, rgba(0,0,0,0.1) 0%, transparent 30%)
+            `,
+            boxShadow: 'inset -10px -10px 20px -5px rgba(0,0,0,0.4), inset 10px 10px 20px -5px rgba(255,255,255,0.6)',
+            willChange: shouldAnimate ? 'border-radius' : 'auto',
+            transform: 'translateZ(0)'
           }}
         >
-          <motion.div
-            animate={isInView ? {
-              borderRadius: [
-                "12px 32px 16px 40px",
-                "32px 16px 40px 12px",
-                "16px 40px 12px 32px",
-                "12px 32px 16px 40px",
-              ]
-            } : {
-              borderRadius: "12px 32px 16px 40px"
-            }}
-            transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-            className={`w-full h-full border-[6px] border-bruise-purple`}
-            style={{
-              backgroundColor: hexColor,
-              willChange: "border-radius, transform",
-              backgroundImage: `
-                radial-gradient(ellipse at 15% 15%, rgba(255,255,255,0.6) 0%, transparent 25%),
-                radial-gradient(circle at 85% 85%, rgba(0,0,0,0.4) 0%, transparent 40%),
-                radial-gradient(ellipse at 50% 120%, rgba(0,0,0,0.5) 0%, transparent 60%),
-                radial-gradient(circle at 12% 18%, rgba(0,0,0,0.2) 2px, transparent 2px),
-                radial-gradient(circle at 16% 40%, rgba(0,0,0,0.15) 2.5px, transparent 2.5px),
-                radial-gradient(circle at 82% 28%, rgba(0,0,0,0.25) 1.5px, transparent 1.5px),
-                radial-gradient(circle at 88% 60%, rgba(0,0,0,0.2) 3px, transparent 3px),
-                radial-gradient(circle at 35% 88%, rgba(0,0,0,0.15) 2px, transparent 2px),
-                radial-gradient(circle at 65% 12%, rgba(0,0,0,0.25) 2.5px, transparent 2.5px),
-                radial-gradient(circle at 72% 52%, rgba(0,0,0,0.2) 1px, transparent 1px),
-                radial-gradient(circle at 28% 78%, rgba(0,0,0,0.25) 2px, transparent 2px)
-              `,
-              boxShadow: `
-                inset 0px -30px 35px -10px rgba(0,0,0,0.6),  
-                inset 0px 15px 18px -5px rgba(255,255,255,0.8), 
-                inset -18px 0px 25px -10px rgba(0,0,0,0.4),  
-                inset 18px 0px 25px -10px rgba(255,255,255,0.5) 
-              `,
-            }}
-          >
-            <div className="absolute top-[10%] left-[8%] w-8 h-6 sm:w-11 sm:h-8 bg-white/30 mix-blend-overlay shadow-[inset_0_5px_8px_rgba(255,255,255,0.9),inset_0_-5px_8px_rgba(0,0,0,0.6)] rounded-[40%_60%_70%_30%/40%_50%_60%_50%]" />
-            <div className="absolute bottom-[20%] right-[12%] w-10 h-8 sm:w-14 sm:h-10 bg-black/20 mix-blend-overlay shadow-[inset_0_4px_6px_rgba(255,255,255,0.5),inset_0_-5px_8px_rgba(0,0,0,0.8)] rounded-[60%_40%_30%_70%/50%_60%_40%_50%]" />
-            <div className="absolute top-[65%] right-[8%] w-6 h-6 sm:w-8 sm:h-8 bg-white/15 mix-blend-overlay shadow-[inset_0_3px_6px_rgba(255,255,255,0.7),inset_0_-4px_6px_rgba(0,0,0,0.5)] rounded-[50%_50%_40%_60%/60%_40%_50%_50%]" />
-            <div className="absolute bottom-[35%] left-[6%] w-5 h-5 sm:w-7 sm:h-7 bg-black/25 mix-blend-overlay shadow-[inset_0_-4px_6px_rgba(0,0,0,0.7)] rounded-full" />
+          {/* Specular Wet Highlights */}
+          <div className="absolute top-[8%] left-[8%] w-10 h-6 bg-white/50 rounded-[50%] transform -rotate-12 pointer-events-none blur-[1px]" />
+          <div className="absolute top-[22%] left-[6%] w-4 h-4 bg-white/50 rounded-[50%] transform -rotate-12 pointer-events-none blur-[1px]" />
+          
+          {/* ORGANIC GROSSNESS: CSS "Pustules" and Bubbles inside the slime */}
+          <div className="absolute top-[15%] right-[10%] w-12 h-10 bg-black/10 rounded-[40%_60%_70%_30%] mix-blend-overlay shadow-[inset_3px_3px_6px_rgba(0,0,0,0.5),inset_-2px_-2px_4px_rgba(255,255,255,0.3)] pointer-events-none" />
+          <div className="absolute bottom-[20%] left-[12%] w-16 h-12 bg-black/15 rounded-[60%_40%_30%_70%] mix-blend-overlay shadow-[inset_4px_4px_8px_rgba(0,0,0,0.6),inset_-2px_-2px_4px_rgba(255,255,255,0.2)] pointer-events-none" />
+          <div className="absolute top-[45%] right-[25%] w-6 h-6 bg-white/10 rounded-full mix-blend-overlay shadow-[inset_-2px_-2px_4px_rgba(255,255,255,0.6),inset_2px_2px_4px_rgba(0,0,0,0.2)] pointer-events-none" />
 
-            <div className="absolute top-[22%] left-[12%] w-[38%] h-3 border-t-[5px] border-black/20 rounded-[50%] transform -rotate-6 blur-[1px]" />
-            <div className="absolute bottom-[28%] right-[18%] w-[48%] h-4 border-b-[7px] border-black/20 rounded-[50%] transform rotate-12 blur-[2px]" />
-            
-            <div className="absolute top-2 left-[10%] right-[20%] h-4 sm:h-6 bg-gradient-to-r from-white/80 to-transparent rounded-[50%] blur-[1px] transform -rotate-2" />
-          </motion.div>
-
-          {/* 4. VISCOUS DRIPS (Now pinned to the bottom of the scalable wrapper) */}
-          <div className="absolute top-full left-0 right-0 z-20 flex justify-around px-10">
-            <LiquidDrip delay={0} color={hexColor} height="h-12" isInView={isInView} />
-            <LiquidDrip delay={2.2} color={hexColor} height="h-16" isInView={isInView} />
-            <LiquidDrip delay={1.1} color={hexColor} height="h-10" isInView={isInView} />
-            <LiquidDrip delay={3.7} color={hexColor} height="h-14" isInView={isInView} />
+          <div className={`relative z-30 w-full flex flex-col items-center justify-center p-6 min-h-[140px] text-center break-words overflow-wrap-anywhere max-w-full ${className}`}>
+            {children}
           </div>
         </div>
 
-        {/* 5. THE CONTENT */}
-        <div className={`relative z-20 w-full flex flex-col items-center justify-center p-6 min-h-[140px] text-center break-words overflow-wrap-anywhere max-w-full ${className}`}>
-          {children}
+        {/* FIXED POSITION: top-[calc(100%-6px)] ensures it starts at the bottom and perfectly overlaps the 6px border */}
+        <div className="absolute top-[calc(100%-6px)] left-0 right-0 z-10 pointer-events-none w-full h-0">
+            {drips.map((drip) => (
+              <LiquidDrip key={drip.id} config={drip} color={hexColor} shouldAnimate={shouldAnimate} />
+            ))}
         </div>
-      </motion.div>
-
-    </div>
+      </div>
+    </motion.div>
   );
 }
 
-function LiquidDrip({ delay, color, height, isInView }: { delay: number; color: string; height: string; isInView: boolean }) {
+function LiquidDrip({ config, color, shouldAnimate }: { config: DripConfig; color: string; shouldAnimate: boolean }) {
   return (
-    <div className="relative flex flex-col items-center w-5">
-      <motion.div
-        animate={isInView ? { 
-          scaleY: [1, 2.8, 1], 
-          scaleX: [1, 0.45, 1], 
-        } : { scaleY: 1, scaleX: 1 }}
-        transition={{ 
-          duration: 7, 
-          repeat: Infinity, 
-          delay: delay,
-          ease: "easeInOut" 
-        }}
-        className={`w-4 ${height} border-[6px] border-t-0 border-bruise-purple origin-top -mt-[6px] z-10`}
+    <div 
+      className="absolute flex flex-col items-center" 
+      style={{ left: config.left, width: config.width, top: '0px' }}
+    >
+      <div 
+        className="border-bruise-purple origin-top z-10"
         style={{ 
+          width: '100%',
+          height: config.height,
+          borderStyle: 'solid',
+          borderWidth: '0px 4px 4px 4px',
           backgroundColor: color,
           borderRadius: '40% 60% 60% 40% / 0% 0% 100% 100%',
-          boxShadow: "inset 0px -8px 10px rgba(0,0,0,0.6)",
-          willChange: "transform"
+          boxShadow: "inset -4px -4px 8px -2px rgba(0,0,0,0.4)",
+          animation: shouldAnimate ? `dripStretch ${config.duration}s ease-in-out ${config.delay}s infinite` : 'none',
+          willChange: shouldAnimate ? "transform" : "auto"
         }}
       />
-      <motion.div
-        animate={isInView ? {
-          y: [0, 45, 70],
-          opacity: [0, 1, 0],
-          scale: [0, 1.2, 0.5]
-        } : { y: 0, opacity: 0, scale: 0 }}
-        transition={{
-          duration: 7,
-          repeat: Infinity,
-          delay: delay + 3.2, 
-          ease: "easeIn"
-        }}
-        className="absolute top-[80%] w-3 h-3 border-[3px] border-bruise-purple rounded-full z-0"
+      <div 
+        className="absolute w-[140%] aspect-square border-[3px] border-bruise-purple rounded-full z-0"
         style={{ 
+          top: '80%',
           backgroundColor: color,
-          willChange: "transform, opacity"
+          opacity: 0,
+          animation: shouldAnimate ? `dripDrop ${config.duration}s ease-in ${config.delay}s infinite` : 'none',
+          willChange: shouldAnimate ? "transform, opacity" : "auto"
         }}
       />
     </div>
