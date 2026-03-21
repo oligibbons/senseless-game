@@ -32,6 +32,7 @@ export interface Room {
   round_settings: {
     mode: 'rounds' | 'score';
     target: number;
+    timer_enabled?: boolean; // <-- FIXED: Added this property
   };
   current_prompt_id: string | null; // UUID, null when in lobby
 }
