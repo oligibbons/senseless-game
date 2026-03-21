@@ -1,3 +1,4 @@
+// src/app/room/[code]/writing/page.tsx
 "use client";
 
 import { useEffect, useState, use, useRef } from "react";
@@ -14,15 +15,23 @@ import { DynamicDowntime } from "@/src/components/DynamicDowntime";
 import { BumpyText } from "@/src/components/BumpyText";
 import GlobalTimer from "@/src/components/GlobalTimer";
 
+// CHANGED: Removed dark 'text-bruise-purple' to prevent the text-outline from turning words into black blobs.
 const SENSE_UI: Record<string, { icon: IconType; verb: string; color: string }> = {
   Sight: { icon: "sight", verb: "LOOK", color: "text-fleshy-pink" },
-  Sound: { icon: "sound", verb: "SOUND", color: "text-bruise-purple" },
-  Smell: { icon: "smell", verb: "SMELL", color: "text-toxic-green" },
+  Sound: { icon: "sound", verb: "SOUND", color: "text-toxic-green" },
+  Smell: { icon: "smell", verb: "SMELL", color: "text-warning-yellow" },
   Touch: { icon: "touch", verb: "FEEL", color: "text-fleshy-pink" },
-  Taste: { icon: "taste", verb: "TASTE", color: "text-warning-yellow" },
+  Taste: { icon: "taste", verb: "TASTE", color: "text-toxic-green" },
 };
 
 type WritingPlayer = Pick<Player, "id" | "player_name" | "is_imposter" | "assigned_sense" | "current_clue" | "wants_reroll">;
+
+// ADDED: Helper to determine proper grammar based on the target word
+const getArticle = (word: string) => {
+  if (!word) return "a";
+  const firstLetter = word.trim().charAt(0).toLowerCase();
+  return ["a", "e", "i", "o", "u"].includes(firstLetter) ? "an" : "a";
+};
 
 export default function WritingPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
@@ -180,7 +189,6 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
     setIsTogglingReroll(false);
   };
 
-  // Triggered when the Global Timer hits 0
   const handleTimeUp = async () => {
     if (!isHost) return;
     await forceAdvancePhaseAction(code, "voting");
@@ -231,9 +239,6 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
     </button>
   );
 
-  // --------------------------------------------------------------------------
-  // WAITING VIEW (For players who have already locked in their clue)
-  // --------------------------------------------------------------------------
   if (isSubmitted) {
     return (
       <div className="flex flex-col flex-grow min-h-full items-center justify-center p-6 text-center space-y-8">
@@ -260,9 +265,6 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
     );
   }
 
-  // --------------------------------------------------------------------------
-  // ACTIVE VIEW (For players currently writing their clue)
-  // --------------------------------------------------------------------------
   return (
     <div className="flex flex-col flex-grow min-h-full p-4 relative z-10">
       {errorMsg && (
@@ -272,9 +274,11 @@ export default function WritingPage({ params }: { params: Promise<{ code: string
       )}
 
       <div className="text-center mt-2 mb-4 flex flex-col items-center w-full">
-        <SlimeBox color="yellow" className="min-h-[160px] !p-6 w-full">
+        {/* CHANGED: Swapped to a purple box to guarantee maximum contrast with the neon text */}
+        <SlimeBox color="purple" className="min-h-[160px] !p-6 w-full">
           <h1 className="font-display text-4xl sm:text-5xl text-white text-outline drop-shadow-chunky leading-tight uppercase">
-            What does <span className={activeSense.color}>{target}</span> {activeSense.verb} like?
+            {/* ADDED: Dynamic grammar checks for A vs AN */}
+            What does {getArticle(target)} <span className={activeSense.color}>{target}</span> {activeSense.verb} like?
           </h1>
         </SlimeBox>
         

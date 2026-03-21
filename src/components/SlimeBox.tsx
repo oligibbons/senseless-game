@@ -1,3 +1,4 @@
+// src/components/SlimeBox.tsx
 "use client";
 
 import { ReactNode, useId, useRef } from "react";
@@ -49,16 +50,13 @@ export function SlimeBox({ children, color, className = "", onClick, disabled = 
     <div 
       ref={containerRef}
       className={`relative w-full pb-12 ${disabled ? "opacity-50 cursor-not-allowed grayscale-[50%]" : ""}`}
-      onClick={onClick || disabled ? handleClick : undefined}
       role={onClick ? "button" : "presentation"}
     >
       
       {/* 1. SLOW VISCOUS BOIL (Optimized SVG Filter) */}
       <svg className="absolute w-0 h-0" aria-hidden="true">
         <filter id={`wavy-${filterId}`} x="-20%" y="-20%" width="140%" height="140%">
-          {/* OPTIMIZATION: Reduced numOctaves from 3 to 1 to drastically cut CPU load */}
           <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="1" result="noise">
-            {/* OPTIMIZATION: Only run the heavy SVG animation if the box is actually visible */}
             {isInView && (
               <animate attributeName="baseFrequency" values="0.015;0.022;0.015" dur={`${12 + Math.random() * 5}s`} repeatCount="indefinite" />
             )}
@@ -67,89 +65,92 @@ export function SlimeBox({ children, color, className = "", onClick, disabled = 
         </filter>
       </svg>
 
-      {/* 2. VISUAL BACKGROUND (Filtered Layer) */}
-      <div 
-        className="absolute top-0 left-0 right-0 bottom-12 z-0 pointer-events-none" 
-        style={{ 
-          filter: `url(#wavy-${filterId}) drop-shadow(8px 8px 0px rgba(18,0,26,0.9))`,
-          // OPTIMIZATION: Force this heavy filtered layer to composite on the GPU
-          WebkitTransform: "translateZ(0)",
-          transform: "translateZ(0)"
-        }}
-      >
-        <motion.div
-          // OPTIMIZATION: Pause animation and hold a static lumpy shape when off-screen
-          animate={isInView ? {
-            borderRadius: [
-              "12px 32px 16px 40px",
-              "32px 16px 40px 12px",
-              "16px 40px 12px 32px",
-              "12px 32px 16px 40px",
-            ]
-          } : {
-            borderRadius: "12px 32px 16px 40px"
-          }}
-          transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-          className={`w-full h-full border-[6px] border-bruise-purple`}
-          style={{
-            backgroundColor: hexColor,
-            // OPTIMIZATION: Tell the browser ahead of time what is going to change
-            willChange: "border-radius, transform",
-            backgroundImage: `
-              radial-gradient(ellipse at 15% 15%, rgba(255,255,255,0.6) 0%, transparent 25%),
-              radial-gradient(circle at 85% 85%, rgba(0,0,0,0.4) 0%, transparent 40%),
-              radial-gradient(ellipse at 50% 120%, rgba(0,0,0,0.5) 0%, transparent 60%),
-              radial-gradient(circle at 12% 18%, rgba(0,0,0,0.2) 2px, transparent 2px),
-              radial-gradient(circle at 16% 40%, rgba(0,0,0,0.15) 2.5px, transparent 2.5px),
-              radial-gradient(circle at 82% 28%, rgba(0,0,0,0.25) 1.5px, transparent 1.5px),
-              radial-gradient(circle at 88% 60%, rgba(0,0,0,0.2) 3px, transparent 3px),
-              radial-gradient(circle at 35% 88%, rgba(0,0,0,0.15) 2px, transparent 2px),
-              radial-gradient(circle at 65% 12%, rgba(0,0,0,0.25) 2.5px, transparent 2.5px),
-              radial-gradient(circle at 72% 52%, rgba(0,0,0,0.2) 1px, transparent 1px),
-              radial-gradient(circle at 28% 78%, rgba(0,0,0,0.25) 2px, transparent 2px)
-            `,
-            boxShadow: `
-              inset 0px -30px 35px -10px rgba(0,0,0,0.6),  
-              inset 0px 15px 18px -5px rgba(255,255,255,0.8), 
-              inset -18px 0px 25px -10px rgba(0,0,0,0.4),  
-              inset 18px 0px 25px -10px rgba(255,255,255,0.5) 
-            `,
-          }}
-        >
-          <div className="absolute top-[10%] left-[8%] w-8 h-6 sm:w-11 sm:h-8 bg-white/30 mix-blend-overlay shadow-[inset_0_5px_8px_rgba(255,255,255,0.9),inset_0_-5px_8px_rgba(0,0,0,0.6)] rounded-[40%_60%_70%_30%/40%_50%_60%_50%]" />
-          <div className="absolute bottom-[20%] right-[12%] w-10 h-8 sm:w-14 sm:h-10 bg-black/20 mix-blend-overlay shadow-[inset_0_4px_6px_rgba(255,255,255,0.5),inset_0_-5px_8px_rgba(0,0,0,0.8)] rounded-[60%_40%_30%_70%/50%_60%_40%_50%]" />
-          <div className="absolute top-[65%] right-[8%] w-6 h-6 sm:w-8 sm:h-8 bg-white/15 mix-blend-overlay shadow-[inset_0_3px_6px_rgba(255,255,255,0.7),inset_0_-4px_6px_rgba(0,0,0,0.5)] rounded-[50%_50%_40%_60%/60%_40%_50%_50%]" />
-          <div className="absolute bottom-[35%] left-[6%] w-5 h-5 sm:w-7 sm:h-7 bg-black/25 mix-blend-overlay shadow-[inset_0_-4px_6px_rgba(0,0,0,0.7)] rounded-full" />
-
-          <div className="absolute top-[22%] left-[12%] w-[38%] h-3 border-t-[5px] border-black/20 rounded-[50%] transform -rotate-6 blur-[1px]" />
-          <div className="absolute bottom-[28%] right-[18%] w-[48%] h-4 border-b-[7px] border-black/20 rounded-[50%] transform rotate-12 blur-[2px]" />
-          
-          <div className="absolute top-2 left-[10%] right-[20%] h-4 sm:h-6 bg-gradient-to-r from-white/80 to-transparent rounded-[50%] blur-[1px] transform -rotate-2" />
-        </motion.div>
-
-        {/* 3. VISCOUS DRIPS (Passed the isInView boolean down so they pause too) */}
-        <div className="absolute top-full left-0 right-0 z-20 flex justify-around px-10">
-          <LiquidDrip delay={0} color={hexColor} height="h-12" isInView={isInView} />
-          <LiquidDrip delay={2.2} color={hexColor} height="h-16" isInView={isInView} />
-          <LiquidDrip delay={1.1} color={hexColor} height="h-10" isInView={isInView} />
-          <LiquidDrip delay={3.7} color={hexColor} height="h-14" isInView={isInView} />
-        </div>
-      </div>
-
-      {/* 4. THE CONTENT */}
-      <motion.div 
-        className={`relative z-20 w-full flex flex-col items-center justify-center p-6 min-h-[140px] text-center ${className} ${isInteractive ? "cursor-pointer" : ""}`}
+      {/* 2. THE MASTER WRAPPER (Handles GPU Scaling & Interaction) */}
+      <motion.div
+        animate={isInView ? { scale: [1, 0.97, 1] } : { scale: 1 }}
+        transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
         whileHover={isInteractive ? { scale: 1.02, rotate: -1 } : {}}
         whileTap={isInteractive ? { scale: 0.95 } : {}}
+        onClick={onClick || disabled ? handleClick : undefined}
+        className={`relative w-full ${isInteractive ? "cursor-pointer" : ""}`}
+        style={{ willChange: "transform", transformOrigin: "center center" }}
       >
-        {children}
+        {/* 3. VISUAL BACKGROUND (Filtered Layer) */}
+        <div 
+          className="absolute inset-0 z-0 pointer-events-none" 
+          style={{ 
+            filter: `url(#wavy-${filterId}) drop-shadow(8px 8px 0px rgba(18,0,26,0.9))`,
+            WebkitTransform: "translateZ(0)",
+            transform: "translateZ(0)"
+          }}
+        >
+          <motion.div
+            animate={isInView ? {
+              borderRadius: [
+                "12px 32px 16px 40px",
+                "32px 16px 40px 12px",
+                "16px 40px 12px 32px",
+                "12px 32px 16px 40px",
+              ]
+            } : {
+              borderRadius: "12px 32px 16px 40px"
+            }}
+            transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+            className={`w-full h-full border-[6px] border-bruise-purple`}
+            style={{
+              backgroundColor: hexColor,
+              willChange: "border-radius, transform",
+              backgroundImage: `
+                radial-gradient(ellipse at 15% 15%, rgba(255,255,255,0.6) 0%, transparent 25%),
+                radial-gradient(circle at 85% 85%, rgba(0,0,0,0.4) 0%, transparent 40%),
+                radial-gradient(ellipse at 50% 120%, rgba(0,0,0,0.5) 0%, transparent 60%),
+                radial-gradient(circle at 12% 18%, rgba(0,0,0,0.2) 2px, transparent 2px),
+                radial-gradient(circle at 16% 40%, rgba(0,0,0,0.15) 2.5px, transparent 2.5px),
+                radial-gradient(circle at 82% 28%, rgba(0,0,0,0.25) 1.5px, transparent 1.5px),
+                radial-gradient(circle at 88% 60%, rgba(0,0,0,0.2) 3px, transparent 3px),
+                radial-gradient(circle at 35% 88%, rgba(0,0,0,0.15) 2px, transparent 2px),
+                radial-gradient(circle at 65% 12%, rgba(0,0,0,0.25) 2.5px, transparent 2.5px),
+                radial-gradient(circle at 72% 52%, rgba(0,0,0,0.2) 1px, transparent 1px),
+                radial-gradient(circle at 28% 78%, rgba(0,0,0,0.25) 2px, transparent 2px)
+              `,
+              boxShadow: `
+                inset 0px -30px 35px -10px rgba(0,0,0,0.6),  
+                inset 0px 15px 18px -5px rgba(255,255,255,0.8), 
+                inset -18px 0px 25px -10px rgba(0,0,0,0.4),  
+                inset 18px 0px 25px -10px rgba(255,255,255,0.5) 
+              `,
+            }}
+          >
+            <div className="absolute top-[10%] left-[8%] w-8 h-6 sm:w-11 sm:h-8 bg-white/30 mix-blend-overlay shadow-[inset_0_5px_8px_rgba(255,255,255,0.9),inset_0_-5px_8px_rgba(0,0,0,0.6)] rounded-[40%_60%_70%_30%/40%_50%_60%_50%]" />
+            <div className="absolute bottom-[20%] right-[12%] w-10 h-8 sm:w-14 sm:h-10 bg-black/20 mix-blend-overlay shadow-[inset_0_4px_6px_rgba(255,255,255,0.5),inset_0_-5px_8px_rgba(0,0,0,0.8)] rounded-[60%_40%_30%_70%/50%_60%_40%_50%]" />
+            <div className="absolute top-[65%] right-[8%] w-6 h-6 sm:w-8 sm:h-8 bg-white/15 mix-blend-overlay shadow-[inset_0_3px_6px_rgba(255,255,255,0.7),inset_0_-4px_6px_rgba(0,0,0,0.5)] rounded-[50%_50%_40%_60%/60%_40%_50%_50%]" />
+            <div className="absolute bottom-[35%] left-[6%] w-5 h-5 sm:w-7 sm:h-7 bg-black/25 mix-blend-overlay shadow-[inset_0_-4px_6px_rgba(0,0,0,0.7)] rounded-full" />
+
+            <div className="absolute top-[22%] left-[12%] w-[38%] h-3 border-t-[5px] border-black/20 rounded-[50%] transform -rotate-6 blur-[1px]" />
+            <div className="absolute bottom-[28%] right-[18%] w-[48%] h-4 border-b-[7px] border-black/20 rounded-[50%] transform rotate-12 blur-[2px]" />
+            
+            <div className="absolute top-2 left-[10%] right-[20%] h-4 sm:h-6 bg-gradient-to-r from-white/80 to-transparent rounded-[50%] blur-[1px] transform -rotate-2" />
+          </motion.div>
+
+          {/* 4. VISCOUS DRIPS (Now pinned to the bottom of the scalable wrapper) */}
+          <div className="absolute top-full left-0 right-0 z-20 flex justify-around px-10">
+            <LiquidDrip delay={0} color={hexColor} height="h-12" isInView={isInView} />
+            <LiquidDrip delay={2.2} color={hexColor} height="h-16" isInView={isInView} />
+            <LiquidDrip delay={1.1} color={hexColor} height="h-10" isInView={isInView} />
+            <LiquidDrip delay={3.7} color={hexColor} height="h-14" isInView={isInView} />
+          </div>
+        </div>
+
+        {/* 5. THE CONTENT */}
+        <div className={`relative z-20 w-full flex flex-col items-center justify-center p-6 min-h-[140px] text-center break-words overflow-wrap-anywhere max-w-full ${className}`}>
+          {children}
+        </div>
       </motion.div>
 
     </div>
   );
 }
 
-// Added isInView prop to pause the stretching drips
 function LiquidDrip({ delay, color, height, isInView }: { delay: number; color: string; height: string; isInView: boolean }) {
   return (
     <div className="relative flex flex-col items-center w-5">

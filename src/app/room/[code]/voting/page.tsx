@@ -1,3 +1,4 @@
+// src/app/room/[code]/voting/page.tsx
 "use client";
 
 import { useEffect, useState, use } from "react";
@@ -8,11 +9,20 @@ import { Player, Room } from "@/src/types/database";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { GrossOutContainer } from "@/src/components/GrossOutContainer";
 import { SlimeBox } from "@/src/components/SlimeBox";
-import { GameIcon } from "@/src/components/GameIcon";
+import { GameIcon, IconType } from "@/src/components/GameIcon";
 import { MeatSackLoader } from "@/src/components/MeatSackLoader";
 import { useAudio } from "@/src/components/AudioProvider";
 import { BumpyText } from "@/src/components/BumpyText";
 import GlobalTimer from "@/src/components/GlobalTimer";
+
+// ADDED: Mapping the string sense from DB to our Icon component types
+const senseToIcon: Record<string, IconType> = {
+  Sight: "sight",
+  Sound: "sound",
+  Smell: "smell",
+  Touch: "touch",
+  Taste: "taste",
+};
 
 export default function VotingPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
@@ -51,7 +61,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         }
       }
 
-      // Fetch all players to show their clues
       const { data: playersData } = await supabase
         .from("players")
         .select("*")
@@ -183,32 +192,32 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                     onClick={() => setSelectedId(player.id)}
                     className={`!p-4 transition-all ${selectedId === player.id ? "scale-105 border-white border-4 shadow-[0_0_20px_rgba(255,215,0,0.6)]" : "opacity-90 grayscale-[20%]"}`}
                   >
-                    <div className="flex flex-col w-full text-left gap-3 relative">
+                    <div className="flex flex-col w-full text-left gap-3 relative z-10">
                       
-                      {/* Top Row: Name and Sense Badge */}
-                      <div className="flex items-center justify-between z-10">
-                        <span className="font-display text-2xl text-white text-outline uppercase tracking-wider">
+                      {/* Top Row: Name and Icon */}
+                      <div className="flex items-center justify-between pb-2 border-b-4 border-black/20">
+                        <span className="font-display text-3xl text-white text-outline uppercase tracking-wider">
                           {player.player_name}
                         </span>
+                        {/* CHANGED: Swapped out text pill for our chunky icon */}
                         {player.assigned_sense && (
-                          <span className="font-sans text-[10px] uppercase font-black bg-white text-bruise-purple px-2 py-1 rounded-md border-2 border-bruise-purple shadow-sm">
-                            Sense: {player.assigned_sense}
-                          </span>
+                          <div className="bg-white rounded-full p-1 border-4 border-bruise-purple shadow-sm transform rotate-3">
+                            <GameIcon type={senseToIcon[player.assigned_sense]} size={30} />
+                          </div>
                         )}
                       </div>
 
-                      {/* Middle Row: The actual clue (Massive and bold) */}
-                      <div className="bg-black/20 p-3 rounded-lg border-2 border-white/20 min-h-[60px] flex items-center justify-center text-center z-10">
-                        <p className={`font-sans font-black leading-tight text-white drop-shadow-md ${player.current_clue ? "text-xl sm:text-2xl" : "text-sm opacity-60 italic"}`}>
+                      {/* Middle Row: The actual clue */}
+                      <div className="bg-white p-4 rounded-xl border-4 border-bruise-purple min-h-[80px] flex items-center justify-center text-center shadow-inner relative overflow-hidden">
+                        <p className={`font-sans font-black leading-tight text-bruise-purple relative z-10 ${player.current_clue ? "text-xl sm:text-2xl" : "text-sm opacity-50 italic"}`}>
                           {player.current_clue ? `"${player.current_clue}"` : "[ Failed to write a clue in time ]"}
                         </p>
                       </div>
 
-                      {/* Background Icon Watermark */}
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-10 pointer-events-none">
-                         <GameIcon type="imposter" size={80} />
-                      </div>
-
+                    </div>
+                    {/* Background Icon Watermark */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-10 pointer-events-none z-0">
+                       <GameIcon type="imposter" size={100} />
                     </div>
                   </SlimeBox>
                 </motion.div>
