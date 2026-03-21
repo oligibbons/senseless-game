@@ -1,16 +1,15 @@
+// src/components/GrossBackground.tsx
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import Image from "next/image";
 
-// Master list of background icons
+// Master list of background icons (Strictly SVGs)
 const ICONS = [
-  "/sense_sight.png",
-  "/sense_sound.png",
-  "/sense_smell.png",
-  "/sense_touch.png",
-  "/sense_taste.png",
+  "/sense_sight.svg",
+  "/sense_sound.svg",
+  "/sense_smell.svg",
+  "/sense_touch.svg",
+  "/sense_taste.svg",
 ];
 
 interface FloatingIcon {
@@ -30,7 +29,7 @@ export default function GrossBackground() {
   const [icons, setIcons] = useState<FloatingIcon[]>([]);
 
   useEffect(() => {
-    // INCREASED FREQUENCY: Generated 25 icons for a busier look
+    // 25 icons for a busier look
     const newIcons: FloatingIcon[] = Array.from({ length: 25 }).map((_, i) => {
       // Determine "depth" - 0 is far/blurry, 2 is near/clear
       const depth = Math.floor(Math.random() * 3);
@@ -38,7 +37,7 @@ export default function GrossBackground() {
       const sizes = [45, 65, 85];
       const blurs = ["blur(4px)", "blur(2px)", "blur(0px)"];
       
-      // INCREASED OPACITY: Values tuned to remain visible against a white background
+      // Opacity tuned to remain visible against a white background
       const opacities = [0.15, 0.22, 0.3]; 
 
       return {
@@ -58,54 +57,65 @@ export default function GrossBackground() {
     setIcons(newIcons);
   }, []);
 
+  // Avoid rendering anything on the server to prevent hydration mismatches with Math.random()
+  if (icons.length === 0) return null;
+
   return (
-    // Clean white background to replace the previous purple
     <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none bg-white">
       {/* Background Vignette utility defined in globals.css for subtle depth */}
       <div className="absolute inset-0 bg-white-vignette opacity-100" />
 
-      <AnimatePresence>
-        {icons.map((icon) => (
-          <motion.div
-            key={icon.id}
-            initial={{ 
-              x: `${icon.x}vw`, 
-              y: `${icon.y}vh`, 
-              rotate: icon.rotation, 
-              opacity: 0 
-            }}
-            animate={{ 
-              // Changed to a smooth linear drift without modulo to prevent teleporting while visible
-              y: [`${icon.y}vh`, `${icon.y - 30}vh`],
-              x: [`${icon.x}vw`, `${icon.x + 15}vw`],
-              rotate: [icon.rotation, icon.rotation + 180],
-              // Fade in, hold, fade out
-              opacity: [0, icon.opacity, icon.opacity, 0]
-            }}
-            transition={{
-              duration: icon.duration,
-              repeat: Infinity,
-              delay: icon.delay,
-              ease: "linear",
-              // Maps exactly to the opacity array: 0% -> 20% -> 80% -> 100% of the duration
-              times: [0, 0.2, 0.8, 1] 
-            }}
-            className="absolute"
-            style={{
-              width: icon.size,
-              height: icon.size,
-              filter: icon.blur, 
-            }}
-          >
-            <Image
-              src={icon.src}
-              alt="floating sense"
-              fill
-              className="object-contain"
-            />
-          </motion.div>
-        ))}
-      </AnimatePresence>
+      {/* Inject pure CSS animation to offload work to the GPU */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @keyframes grossFloat {
+            0% { 
+              transform: translate3d(var(--startX), var(--startY), 0) rotate(var(--rotStart)); 
+              opacity: 0; 
+            }
+            20% { 
+              opacity: var(--targetOpacity); 
+            }
+            80% { 
+              opacity: var(--targetOpacity); 
+            }
+            100% { 
+              transform: translate3d(var(--endX), var(--endY), 0) rotate(var(--rotEnd)); 
+              opacity: 0; 
+            }
+          }
+          .gross-particle {
+            position: absolute;
+            will-change: transform, opacity;
+            /* Force hardware acceleration to prevent overpainting the foreground */
+            -webkit-transform: translateZ(0);
+          }
+        `
+      }} />
+
+      {icons.map((icon) => (
+        <img
+          key={icon.id}
+          src={icon.src}
+          alt=""
+          aria-hidden="true"
+          className="gross-particle"
+          style={{
+            width: icon.size,
+            height: icon.size,
+            filter: icon.blur,
+            animation: `grossFloat ${icon.duration}s linear ${icon.delay}s infinite`,
+            // Pass the random variables directly to CSS
+            '--startX': `${icon.x}vw`,
+            '--startY': `${icon.y}vh`,
+            '--endX': `${icon.x + 15}vw`,
+            '--endY': `${icon.y - 30}vh`,
+            '--rotStart': `${icon.rotation}deg`,
+            '--rotEnd': `${icon.rotation + 180}deg`,
+            '--targetOpacity': icon.opacity,
+          } as React.CSSProperties}
+        />
+      ))}
     </div>
   );
 }
